@@ -457,9 +457,8 @@ export default function UnifiedChatCenter({
       <div style={{
         display: 'grid',
         gridTemplateColumns: '330px 1fr 290px',
-        height: 'calc(100vh - 210px)',
-        minHeight: '620px',
-        maxHeight: '780px',
+        height: 'calc(100vh - 230px)',
+        minHeight: '520px',
         backgroundColor: '#ffffff',
         borderRadius: '16px',
         border: '1px solid #e2e8f0',
@@ -473,10 +472,13 @@ export default function UnifiedChatCenter({
           borderRight: '1px solid #e2e8f0',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#f8fafc'
+          backgroundColor: '#f8fafc',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden'
         }}>
           {/* Header & Filters */}
-          <div style={{ padding: '14px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff' }}>
+          <div style={{ padding: '14px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
               <h3 style={{ fontSize: '0.98rem', fontWeight: '800', color: '#0f172a' }}>
                 รวมแชทและคอมเมนต์
@@ -580,7 +582,10 @@ export default function UnifiedChatCenter({
           </div>
 
           {/* Scrollable Conversation List */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="scrollable-pane" style={{
+            flex: 1,
+            minHeight: 0
+          }}>
             {filteredConversations.length === 0 ? (
               <div style={{ padding: '30px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
                 ไม่พบบทสนทนาที่ตรงกัน
@@ -672,7 +677,14 @@ export default function UnifiedChatCenter({
         {/* ============================================================== */}
         {/* 2. MIDDLE PANE: LIVE CHAT & REPLY STREAM                        */}
         {/* ============================================================== */}
-        <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#ffffff',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden'
+        }}>
           {activeLead ? (
             <>
               {/* Active Chat Header */}
@@ -682,7 +694,8 @@ export default function UnifiedChatCenter({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                flexShrink: 0
               }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -805,9 +818,9 @@ export default function UnifiedChatCenter({
               )}
 
               {/* Chat Messages Stream */}
-              <div style={{
+              <div className="scrollable-pane" style={{
                 flex: 1,
-                overflowY: 'auto',
+                minHeight: 0,
                 padding: '18px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -911,7 +924,8 @@ export default function UnifiedChatCenter({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                overflowX: 'auto'
+                overflowX: 'auto',
+                flexShrink: 0
               }}>
                 {/* AI Draft Button */}
                 <button
@@ -969,7 +983,8 @@ export default function UnifiedChatCenter({
                 backgroundColor: '#ffffff',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px'
+                gap: '6px',
+                flexShrink: 0
               }}>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                   <textarea
@@ -1026,11 +1041,12 @@ export default function UnifiedChatCenter({
         {/* ============================================================== */}
         {/* 3. RIGHT PANE: CRM PROFILE & FOLLOW-UP REMINDER                 */}
         {/* ============================================================== */}
-        <div style={{
+        <div className="scrollable-pane" style={{
           borderLeft: '1px solid #e2e8f0',
           backgroundColor: '#ffffff',
           padding: '16px 14px',
-          overflowY: 'auto',
+          height: '100%',
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           gap: '14px'

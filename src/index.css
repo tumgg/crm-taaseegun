@@ -141,9 +141,28 @@ a {
 
 /* Layout Container */
 .app-container {
-  max-width: 1380px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 24px 20px 80px 20px;
+  padding: 16px 20px 32px 20px;
+}
+
+.scrollable-pane {
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollable-pane::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollable-pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollable-pane::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 4px;
+}
+.scrollable-pane::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
 /* Badges */
