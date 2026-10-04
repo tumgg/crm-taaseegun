@@ -27,11 +27,13 @@ import {
   Calendar,
   Bell,
   Zap,
-  Bot
+  Bot,
+  RefreshCw
 } from 'lucide-react';
 import { leadStatusOptions, quickReplyTemplates, interactionTypeOptions } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
+import { fetchLiveFacebookConversations } from '../utils/facebookLiveSync';
 
 export default function UnifiedChatCenter({ 
   leads, 
@@ -51,6 +53,45 @@ export default function UnifiedChatCenter({
   const [isAutoPilotEnabled, setIsAutoPilotEnabled] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
+  const [isSyncingFb, setIsSyncingFb] = useState(false);
+
+  // Sync real live conversations from Meta Graph API
+  const handleSyncRealFacebook = async () => {
+    const connectedPage = facebookPages.find(p => p.activePageToken && p.activePageToken.startsWith('EAA'));
+    if (!connectedPage) {
+      alert('ยังไม่พบเพจที่ใส่ Access Token กรุณาไปที่แท็บ "ตั้งค่า & เชื่อมต่อ API" เพื่อใส่ Token ก่อนครับ');
+      return;
+    }
+
+    setIsSyncingFb(true);
+    try {
+      const realLeads = await fetchLiveFacebookConversations(connectedPage.id, connectedPage.activePageToken, connectedPage.name);
+      if (realLeads.length === 0) {
+        alert(`เชื่อมต่อกับเพจ "${connectedPage.name}" สำเร็จ แต่ยังไม่มีข้อความใหม่ใน Inbox ครับ`);
+      } else {
+        setLeads(prev => {
+          const existingIds = new Set(prev.map(l => l.id));
+          const newUnique = realLeads.filter(l => !existingIds.has(l.id));
+          return [...newUnique, ...prev];
+        });
+
+        if (isSoundEnabled) {
+          playNotificationSound();
+        }
+
+        setSelectedLeadId(realLeads[0].id);
+        setToastNotification({
+          title: `🎉 ซิงค์แชทจริงสำเร็จ!`,
+          message: `ดึง ${realLeads.length} บทสนทนาจริงจากเพจ "${connectedPage.name}" เข้ามาในระบบแล้ว!`
+        });
+        setTimeout(() => setToastNotification(null), 6000);
+      }
+    } catch (err) {
+      alert(`ไม่สามารถดึงข้อมูลจาก Facebook API ได้: ${err.message}`);
+    } finally {
+      setIsSyncingFb(false);
+    }
+  };
   
   const chatMessagesEndRef = useRef(null);
 
@@ -360,8 +401,32 @@ export default function UnifiedChatCenter({
           </button>
         </div>
 
-        {/* Live Simulation Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Live Sync Real Facebook & Simulation Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSyncRealFacebook}
+            disabled={isSyncingFb}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 15px',
+              borderRadius: '8px',
+              backgroundColor: '#1877f2',
+              color: '#ffffff',
+              fontSize: '0.8rem',
+              fontWeight: '700',
+              border: 'none',
+              boxShadow: '0 2px 8px rgba(24, 119, 242, 0.35)',
+              cursor: isSyncingFb ? 'not-allowed' : 'pointer',
+              opacity: isSyncingFb ? 0.75 : 1
+            }}
+            title="ดึงข้อความจริงจาก Inbox เพจ Facebook ที่เชื่อมต่อไว้เข้ามาทันที"
+          >
+            <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
+            {isSyncingFb ? 'กำลังดึงแชทจริง...' : '⚡ ดึงแชทสดจากเพจ Facebook'}
+          </button>
+
           <button
             onClick={handleSimulateIncomingMessage}
             style={{
@@ -378,7 +443,7 @@ export default function UnifiedChatCenter({
             }}
             title="กดเพื่อทดสอบเสียงเตือนและระบบ AI รับข้อความสด"
           >
-            <Zap size={14} /> ⚡ ทดสอบจำลองลูกค้าทักสด
+            <Zap size={14} /> ทดสอบจำลองลูกค้าทัก
           </button>
         </div>
       </div>

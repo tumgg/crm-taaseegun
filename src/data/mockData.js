@@ -2,123 +2,274 @@
 
 export const initialFacebookPages = [
   {
-    id: 'fb-page-1',
-    name: 'เพจหลัก: Tech & Lifestyle Studio',
-    handle: '@techlifestyle.th',
-    category: 'Digital Creator / Media',
-    avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
-    followers: 148500,
-    reach: 482000,
-    engagementRate: '4.8%',
-    growthRate: '+14.2%',
-    activePageToken: 'EAAQ...9x8zK (Connected)',
+    id: '113532784994486',
+    name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes',
+    handle: '@goodvibes.texturepaint',
+    category: 'ช่างพ่นสีเทกเจอร์ / ตกแต่งผนัง',
+    avatar: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=150&auto=format&fit=crop&q=80',
+    followers: 24500,
+    reach: 98000,
+    engagementRate: '5.8%',
+    growthRate: '+18.4%',
+    activePageToken: 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXmFNrU2RIZASiV4YvZC1W3dmZAcfAxnZCC4ZA7ptk6r0WpKMBlnDRKBli8yzdZCLDBl77QQU58Wie0yZAYBNcWPNaLmZCl41bfe87zfeTj2qacppOOdnxyZAZAbpnpApaoBZCQtousIhkRpUuPGryfZAevGVXW6Ip2x0jijS4sKyb',
     demographics: {
-      gender: { women: 42, men: 54, other: 4 },
+      gender: { women: 45, men: 52, other: 3 },
       ageRange: [
-        { age: '18-24', pct: 18 },
-        { age: '25-34', pct: 49 },
-        { age: '35-44', pct: 23 },
+        { age: '18-24', pct: 15 },
+        { age: '25-34', pct: 52 },
+        { age: '35-44', pct: 24 },
         { age: '45-54', pct: 7 },
-        { age: '55+', pct: 3 }
+        { age: '55+', pct: 2 }
       ],
       topCities: [
-        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 64 },
-        { city: 'เชียงใหม่ (Chiang Mai)', pct: 12 },
-        { city: 'นนทบุรี (Nonthaburi)', pct: 9 },
-        { city: 'ชลบุรี (Chonburi)', pct: 8 },
-        { city: 'ขอนแก่น (Khon Kaen)', pct: 7 }
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 68 },
+        { city: 'นนทบุรี (Nonthaburi)', pct: 14 },
+        { city: 'สมุทรปราการ (Samut Prakan)', pct: 9 },
+        { city: 'ปทุมธานี (Pathum Thani)', pct: 6 },
+        { city: 'ชลบุรี (Chonburi)', pct: 3 }
       ],
       bestTimes: [
         'วันจันทร์ 19:00 - 22:00 น.',
         'วันพุธ 20:00 - 23:00 น.',
-        'วันอาทิตย์ 18:00 - 21:00 น.'
+        'วันเสาร์ 10:00 - 14:00 น.'
       ]
     },
     metrics: {
-      profileViews: '32.4K',
-      linkClicks: '14.8K',
-      totalShares: '9.2K',
-      inboxLeadsCount: 48
+      profileViews: '38.4K',
+      linkClicks: '19.2K',
+      totalShares: '8.4K',
+      inboxLeadsCount: 42
     }
   },
   {
-    id: 'fb-page-2',
-    name: 'เพจสาขา: Gadget Review & Deals Thailand',
-    handle: '@gadgetdeals.review',
-    category: 'E-commerce & Product Review',
-    avatar: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=150&auto=format&fit=crop&q=80',
-    followers: 86200,
-    reach: 310500,
-    engagementRate: '5.6%',
-    growthRate: '+21.5%',
-    activePageToken: 'EAAW...4a2bC (Connected)',
+    id: '110842514841725',
+    name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี',
+    handle: '@taaseegun.official',
+    category: 'รับเหมาทาสีครบวงจร / ช่างทาสี',
+    avatar: 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=80',
+    followers: 58200,
+    reach: 245000,
+    engagementRate: '6.4%',
+    growthRate: '+22.1%',
+    activePageToken: 'EAAZ...Live (Connected)',
     demographics: {
-      gender: { women: 28, men: 68, other: 4 },
+      gender: { women: 40, men: 57, other: 3 },
       ageRange: [
-        { age: '18-24', pct: 24 },
-        { age: '25-34', pct: 52 },
-        { age: '35-44', pct: 16 },
+        { age: '18-24', pct: 12 },
+        { age: '25-34', pct: 48 },
+        { age: '35-44', pct: 28 },
+        { age: '45-54', pct: 9 },
+        { age: '55+', pct: 3 }
+      ],
+      topCities: [
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 65 },
+        { city: 'นนทบุรี (Nonthaburi)', pct: 12 },
+        { city: 'ปทุมธานี (Pathum Thani)', pct: 10 },
+        { city: 'สมุทรปราการ (Samut Prakan)', pct: 8 },
+        { city: 'นครปฐม (Nakhon Pathom)', pct: 5 }
+      ],
+      bestTimes: [
+        'วันอังคาร 19:30 - 22:00 น.',
+        'วันพฤหัสบดี 19:00 - 21:30 น.',
+        'วันอาทิตย์ 09:00 - 13:00 น.'
+      ]
+    },
+    metrics: {
+      profileViews: '54.2K',
+      linkClicks: '32.1K',
+      totalShares: '14.8K',
+      inboxLeadsCount: 68
+    }
+  },
+  {
+    id: '100873871740668',
+    name: 'ทาสีคอนโด ทาสีภายใน อย่างมืออาชีพ - RoomsPainting -',
+    handle: '@roomspainting.condo',
+    category: 'ทาสีห้องคอนโด / งานภายใน',
+    avatar: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150&auto=format&fit=crop&q=80',
+    followers: 31200,
+    reach: 142000,
+    engagementRate: '5.1%',
+    growthRate: '+16.5%',
+    activePageToken: 'EAAZ...Live (Connected)',
+    demographics: {
+      gender: { women: 58, men: 39, other: 3 },
+      ageRange: [
+        { age: '18-24', pct: 22 },
+        { age: '25-34', pct: 58 },
+        { age: '35-44', pct: 15 },
+        { age: '45-54', pct: 4 },
+        { age: '55+', pct: 1 }
+      ],
+      topCities: [
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 82 },
+        { city: 'นนทบุรี (Nonthaburi)', pct: 10 },
+        { city: 'สมุทรปราการ (Samut Prakan)', pct: 5 },
+        { city: 'ปทุมธานี (Pathum Thani)', pct: 3 }
+      ],
+      bestTimes: [
+        'วันพุธ 20:00 - 23:00 น.',
+        'วันศุกร์ 20:00 - 23:30 น.',
+        'วันอาทิตย์ 18:00 - 22:00 น.'
+      ]
+    },
+    metrics: {
+      profileViews: '42.6K',
+      linkClicks: '24.5K',
+      totalShares: '11.3K',
+      inboxLeadsCount: 54
+    }
+  },
+  {
+    id: '410827156426441',
+    name: 'ทาสีบ้าน ทาวเฮ้าส์ บ้านเดี่ยว หอพัก อาคาร',
+    handle: '@taaseebaan.bangkok',
+    category: 'รับเหมาทาสีภายนอก-ภายใน',
+    avatar: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=150&auto=format&fit=crop&q=80',
+    followers: 46800,
+    reach: 185000,
+    engagementRate: '4.9%',
+    growthRate: '+12.7%',
+    activePageToken: 'EAAZ...Live (Connected)',
+    demographics: {
+      gender: { women: 48, men: 49, other: 3 },
+      ageRange: [
+        { age: '18-24', pct: 10 },
+        { age: '25-34', pct: 44 },
+        { age: '35-44', pct: 32 },
+        { age: '45-54', pct: 11 },
+        { age: '55+', pct: 3 }
+      ],
+      topCities: [
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 70 },
+        { city: 'นนทบุรี (Nonthaburi)', pct: 12 },
+        { city: 'ปทุมธานี (Pathum Thani)', pct: 10 },
+        { city: 'สมุทรปราการ (Samut Prakan)', pct: 8 }
+      ],
+      bestTimes: [
+        'วันจันทร์ 19:00 - 21:00 น.',
+        'วันพฤหัสบดี 19:30 - 22:00 น.',
+        'วันเสาร์ 09:00 - 12:00 น.'
+      ]
+    },
+    metrics: {
+      profileViews: '31.2K',
+      linkClicks: '16.7K',
+      totalShares: '7.9K',
+      inboxLeadsCount: 39
+    }
+  },
+  {
+    id: '101038208390600',
+    name: 'รับทำสีเทกเจอร์ texture สีตกแต่งพิเศษ by ช่างหมี',
+    handle: '@texture.bear',
+    category: 'งานสีเทกเจอร์เฉพาะทาง',
+    avatar: 'https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=150&auto=format&fit=crop&q=80',
+    followers: 18400,
+    reach: 82000,
+    engagementRate: '5.4%',
+    growthRate: '+15.2%',
+    activePageToken: 'EAAZ...Live (Connected)',
+    demographics: {
+      gender: { women: 42, men: 55, other: 3 },
+      ageRange: [
+        { age: '18-24', pct: 16 },
+        { age: '25-34', pct: 54 },
+        { age: '35-44', pct: 22 },
         { age: '45-54', pct: 6 },
         { age: '55+', pct: 2 }
       ],
       topCities: [
-        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 58 },
-        { city: 'ชลบุรี (Chonburi)', pct: 14 },
-        { city: 'สมุทรปราการ (Samut Prakan)', pct: 11 },
-        { city: 'เชียงใหม่ (Chiang Mai)', pct: 10 },
-        { city: 'นครราชสีมา (Korat)', pct: 7 }
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 62 },
+        { city: 'เชียงใหม่ (Chiang Mai)', pct: 15 },
+        { city: 'ชลบุรี (Chonburi)', pct: 12 }
       ],
       bestTimes: [
-        'วันอังคาร 12:00 - 13:30 น.',
-        'วันพฤหัสบดี 19:30 - 22:00 น.',
-        'วันเสาร์ 11:00 - 15:00 น.'
+        'วันพุธ 18:00 - 21:00 น.',
+        'วันอาทิตย์ 14:00 - 18:00 น.'
       ]
     },
     metrics: {
-      profileViews: '24.1K',
-      linkClicks: '28.9K',
-      totalShares: '12.4K',
-      inboxLeadsCount: 65
+      profileViews: '21.5K',
+      linkClicks: '11.8K',
+      totalShares: '5.2K',
+      inboxLeadsCount: 28
     }
   },
   {
-    id: 'fb-page-3',
-    name: 'เพจคอมมูนิตี้: Creator Club Thailand',
-    handle: '@creatorclub.th',
-    category: 'Community & Education',
-    avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80',
-    followers: 43100,
-    reach: 124000,
-    engagementRate: '6.2%',
-    growthRate: '+9.4%',
-    activePageToken: 'EAAM...1v9qP (Connected)',
+    id: '200343403170775',
+    name: 'เดอ นา เดอ เมีย ฟาร์มสเตย์',
+    handle: '@derna.farmstay',
+    category: 'ท่องเที่ยว / ฟาร์มสเตย์ & ธรรมชาติ',
+    avatar: 'https://images.unsplash.com/photo-1500076656116-558758c991c1?w=150&auto=format&fit=crop&q=80',
+    followers: 29800,
+    reach: 125000,
+    engagementRate: '7.8%',
+    growthRate: '+24.5%',
+    activePageToken: 'EAAZ...Live (Connected)',
     demographics: {
-      gender: { women: 52, men: 44, other: 4 },
+      gender: { women: 65, men: 32, other: 3 },
       ageRange: [
-        { age: '18-24', pct: 31 },
-        { age: '25-34', pct: 45 },
+        { age: '18-24', pct: 28 },
+        { age: '25-34', pct: 46 },
         { age: '35-44', pct: 18 },
-        { age: '45-54', pct: 4 },
+        { age: '45-54', pct: 6 },
         { age: '55+', pct: 2 }
       ],
       topCities: [
-        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 71 },
-        { city: 'นนทบุรี (Nonthaburi)', pct: 11 },
-        { city: 'เชียงใหม่ (Chiang Mai)', pct: 8 },
-        { city: 'ปทุมธานี (Pathum Thani)', pct: 6 },
-        { city: 'ภูเก็ต (Phuket)', pct: 4 }
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 55 },
+        { city: 'ขอนแก่น (Khon Kaen)', pct: 20 },
+        { city: 'นครราชสีมา (Korat)', pct: 15 }
       ],
       bestTimes: [
-        'วันพุธ 21:00 - 23:00 น.',
-        'วันศุกร์ 20:00 - 23:30 น.',
-        'วันอาทิตย์ 19:00 - 22:00 น.'
+        'วันศุกร์ 18:00 - 22:00 น.',
+        'วันเสาร์ 08:00 - 12:00 น.',
+        'วันอาทิตย์ 17:00 - 21:00 น.'
       ]
     },
     metrics: {
-      profileViews: '15.8K',
-      linkClicks: '8.3K',
-      totalShares: '5.1K',
-      inboxLeadsCount: 22
+      profileViews: '35.4K',
+      linkClicks: '18.9K',
+      totalShares: '12.1K',
+      inboxLeadsCount: 37
+    }
+  },
+  {
+    id: '100869824670807',
+    name: 'มันส์ติดปาก',
+    handle: '@muntidpak.food',
+    category: 'อาหาร & ขนม / ของกินเล่น',
+    avatar: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150&auto=format&fit=crop&q=80',
+    followers: 35400,
+    reach: 164000,
+    engagementRate: '6.9%',
+    growthRate: '+19.8%',
+    activePageToken: 'EAAZ...Live (Connected)',
+    demographics: {
+      gender: { women: 62, men: 35, other: 3 },
+      ageRange: [
+        { age: '18-24', pct: 35 },
+        { age: '25-34', pct: 45 },
+        { age: '35-44', pct: 14 },
+        { age: '45-54', pct: 5 },
+        { age: '55+', pct: 1 }
+      ],
+      topCities: [
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 60 },
+        { city: 'ชลบุรี (Chonburi)', pct: 15 },
+        { city: 'เชียงใหม่ (Chiang Mai)', pct: 12 }
+      ],
+      bestTimes: [
+        'วันจันทร์ 11:30 - 13:30 น.',
+        'วันพฤหัสบดี 17:30 - 20:00 น.',
+        'วันเสาร์ 18:00 - 22:00 น.'
+      ]
+    },
+    metrics: {
+      profileViews: '48.9K',
+      linkClicks: '29.3K',
+      totalShares: '16.4K',
+      inboxLeadsCount: 62
     }
   }
 ];
