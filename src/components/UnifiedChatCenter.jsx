@@ -117,14 +117,16 @@ export default function UnifiedChatCenter({
     }
   };
   
-  const chatMessagesEndRef = useRef(null);
+  const chatMessagesContainerRef = useRef(null);
 
   // Default active lead selection
   const activeLead = leads.find(l => l.id === selectedLeadId) || leads[0];
 
-  // Auto scroll to bottom of chat
+  // Auto scroll to bottom of chat messages container ONLY (without scrolling the browser window)
   useEffect(() => {
-    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatMessagesContainerRef.current) {
+      chatMessagesContainerRef.current.scrollTop = chatMessagesContainerRef.current.scrollHeight;
+    }
   }, [activeLead?.messages, activeLead?.id]);
 
   // Check if a lead has follow-up due
@@ -457,8 +459,8 @@ export default function UnifiedChatCenter({
       <div style={{
         display: 'grid',
         gridTemplateColumns: '330px 1fr 290px',
-        height: 'calc(100vh - 230px)',
-        minHeight: '520px',
+        height: 'calc(100vh - 215px)',
+        minHeight: '480px',
         backgroundColor: '#ffffff',
         borderRadius: '16px',
         border: '1px solid #e2e8f0',
@@ -582,10 +584,15 @@ export default function UnifiedChatCenter({
           </div>
 
           {/* Scrollable Conversation List */}
-          <div className="scrollable-pane" style={{
-            flex: 1,
-            minHeight: 0
-          }}>
+          <div 
+            className="scrollable-pane" 
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overscrollBehavior: 'contain'
+            }}
+          >
             {filteredConversations.length === 0 ? (
               <div style={{ padding: '30px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
                 ไม่พบบทสนทนาที่ตรงกัน
@@ -818,15 +825,21 @@ export default function UnifiedChatCenter({
               )}
 
               {/* Chat Messages Stream */}
-              <div className="scrollable-pane" style={{
-                flex: 1,
-                minHeight: 0,
-                padding: '18px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                backgroundColor: '#fafafa'
-              }}>
+              <div 
+                ref={chatMessagesContainerRef}
+                className="scrollable-pane" 
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  overscrollBehavior: 'contain',
+                  padding: '18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  backgroundColor: '#fafafa'
+                }}
+              >
                 {(!activeLead.messages || activeLead.messages.length === 0) && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                     <div style={{
@@ -913,7 +926,6 @@ export default function UnifiedChatCenter({
                     </div>
                   );
                 })}
-                <div ref={chatMessagesEndRef} />
               </div>
 
               {/* AI Suggestion Bar & Quick Reply Bar */}
@@ -1047,6 +1059,8 @@ export default function UnifiedChatCenter({
           padding: '16px 14px',
           height: '100%',
           minHeight: 0,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
           display: 'flex',
           flexDirection: 'column',
           gap: '14px'

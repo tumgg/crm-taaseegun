@@ -26,9 +26,9 @@ export default function Header({
 }) {
   return (
     <header style={{
-      marginBottom: '24px',
+      marginBottom: '16px',
       borderBottom: '1px solid var(--border-subtle)',
-      paddingBottom: '18px'
+      paddingBottom: '12px'
     }}>
       {/* Top Bar */}
       <div style={{
@@ -36,8 +36,8 @@ export default function Header({
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '16px',
-        marginBottom: '18px'
+        gap: '14px',
+        marginBottom: '12px'
       }}>
         {/* Brand identity */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>

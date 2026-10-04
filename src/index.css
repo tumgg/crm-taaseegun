@@ -148,14 +148,17 @@ a {
 
 .scrollable-pane {
   overflow-y: auto !important;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain !important;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 .scrollable-pane::-webkit-scrollbar {
-  width: 6px;
+  width: 7px;
 }
 .scrollable-pane::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
 }
 .scrollable-pane::-webkit-scrollbar-thumb {
   background-color: #cbd5e1;
