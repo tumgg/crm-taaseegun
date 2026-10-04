@@ -1,0 +1,16 @@
+{
+  "short_name": "OmniCRM",
+  "name": "crm.taaseegun.com — OmniSocial Hub & CRM",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f8fafc",
+  "theme_color": "#1877f2",
+  "display": "standalone",
+  "orientation": "portrait"
+}
