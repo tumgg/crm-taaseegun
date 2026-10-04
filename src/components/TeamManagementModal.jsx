@@ -44,6 +44,24 @@ export default function TeamManagementModal({
   const [role, setRole] = useState('sales');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_OPTIONS[3]);
   const [errorMessage, setErrorMessage] = useState('');
+  const [editingPasswordId, setEditingPasswordId] = useState(null);
+  const [tempNewPassword, setTempNewPassword] = useState('');
+
+  const handleStartEditPassword = (member) => {
+    setEditingPasswordId(member.id);
+    setTempNewPassword(member.password);
+  };
+
+  const handleSavePassword = (memberId) => {
+    if (!tempNewPassword.trim()) {
+      alert('รหัสผ่านต้องไม่ว่างเปล่า');
+      return;
+    }
+    const updated = teamMembers.map(m => m.id === memberId ? { ...m, password: tempNewPassword.trim() } : m);
+    onSaveTeamMembers(updated);
+    setEditingPasswordId(null);
+    alert('เปลี่ยนรหัสผ่านสำเร็จแล้ว!');
+  };
 
   if (!isOpen) return null;
 
@@ -298,28 +316,96 @@ export default function TeamManagementModal({
                         <span>อีเมล: {member.email}</span>
                       </div>
                       {/* Password line */}
-                      <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <Lock size={13} color="#94a3b8" />
                         <span>รหัสผ่าน: </span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: '600', backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>
-                          {showPasswordMap[member.id] ? member.password : '••••••••••••'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => togglePassword(member.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#64748b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '2px'
-                          }}
-                          title={showPasswordMap[member.id] ? 'ซ่อนรหัส' : 'ดูรหัสผ่าน'}
-                        >
-                          {showPasswordMap[member.id] ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
+                        {editingPasswordId === member.id ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="text"
+                              value={tempNewPassword}
+                              onChange={(e) => setTempNewPassword(e.target.value)}
+                              style={{
+                                padding: '2px 8px',
+                                fontSize: '0.8rem',
+                                borderRadius: '4px',
+                                border: '1px solid #1877f2',
+                                outline: 'none',
+                                width: '130px'
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSavePassword(member.id)}
+                              style={{
+                                padding: '2px 8px',
+                                backgroundColor: '#1877f2',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              บันทึก
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPasswordId(null)}
+                              style={{
+                                padding: '2px 6px',
+                                backgroundColor: '#f1f5f9',
+                                color: '#64748b',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ยกเลิก
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span style={{ fontFamily: 'monospace', fontWeight: '600', backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>
+                              {showPasswordMap[member.id] ? member.password : '••••••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => togglePassword(member.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#64748b',
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '2px'
+                              }}
+                              title={showPasswordMap[member.id] ? 'ซ่อนรหัส' : 'ดูรหัสผ่าน'}
+                            >
+                              {showPasswordMap[member.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditPassword(member)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#1877f2',
+                                fontSize: '0.75rem',
+                                textDecoration: 'underline',
+                                padding: '0 4px',
+                                fontWeight: '600'
+                              }}
+                            >
+                              เปลี่ยนรหัส
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
