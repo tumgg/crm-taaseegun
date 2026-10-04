@@ -338,7 +338,7 @@ export default function UnifiedChatCenter({
   const dueFollowUpsCount = leads.filter(l => isFollowUpDue(l.followUpDate)).length;
 
   return (
-    <div className="animate-fade-in" style={{ position: 'relative' }}>
+    <div className="animate-fade-in chat-center-root" style={{ position: 'relative' }}>
       {/* Toast Notification Alert */}
       {toastNotification && (
         <div style={{
@@ -371,10 +371,11 @@ export default function UnifiedChatCenter({
         backgroundColor: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: '12px',
-        padding: '10px 18px',
-        marginBottom: '14px',
+        padding: '6px 14px',
+        marginBottom: '8px',
         flexWrap: 'wrap',
-        gap: '10px'
+        gap: '8px',
+        flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -459,8 +460,9 @@ export default function UnifiedChatCenter({
       <div style={{
         display: 'grid',
         gridTemplateColumns: '330px 1fr 290px',
-        height: 'calc(100vh - 215px)',
-        minHeight: '480px',
+        flex: 1,
+        minHeight: 0,
+        height: '100%',
         backgroundColor: '#ffffff',
         borderRadius: '16px',
         border: '1px solid #e2e8f0',
@@ -991,14 +993,15 @@ export default function UnifiedChatCenter({
               {/* Message Composer Form */}
               <form onSubmit={handleSendMessage} style={{
                 padding: '10px 14px',
-                borderTop: '1px solid #e2e8f0',
+                borderTop: '2px solid #e2e8f0',
                 backgroundColor: '#ffffff',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '6px',
-                flexShrink: 0
+                flexShrink: 0,
+                boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
               }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <textarea
                     rows="2"
                     value={replyText}
@@ -1009,15 +1012,25 @@ export default function UnifiedChatCenter({
                         handleSendMessage();
                       }
                     }}
-                    placeholder={`พิมพ์ตอบกลับ ${activeLead.name}... (กด Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่)`}
+                    placeholder={`พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Enter เพื่อส่ง, Shift+Enter ขึ้นบรรทัดใหม่)`}
                     style={{
                       flex: 1,
                       padding: '9px 12px',
                       borderRadius: '10px',
-                      border: '1px solid #cbd5e1',
+                      border: '1.5px solid #cbd5e1',
                       fontSize: '0.86rem',
                       fontFamily: 'inherit',
-                      resize: 'none'
+                      resize: 'none',
+                      backgroundColor: '#f8fafc',
+                      transition: 'border-color 0.2s, background-color 0.2s'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#1877f2';
+                      e.target.style.backgroundColor = '#ffffff';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#cbd5e1';
+                      e.target.style.backgroundColor = '#f8fafc';
                     }}
                   />
 
@@ -1025,20 +1038,24 @@ export default function UnifiedChatCenter({
                     type="submit"
                     disabled={!replyText.trim()}
                     style={{
-                      padding: '10px 18px',
+                      padding: '0 18px',
                       borderRadius: '10px',
                       backgroundColor: replyText.trim() ? '#1877f2' : '#cbd5e1',
                       color: '#ffffff',
                       fontWeight: '700',
-                      fontSize: '0.86rem',
+                      fontSize: '0.88rem',
                       display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'center',
                       gap: '6px',
                       cursor: replyText.trim() ? 'pointer' : 'not-allowed',
-                      height: '42px'
+                      height: '52px',
+                      boxShadow: replyText.trim() ? '0 2px 8px rgba(24, 119, 242, 0.35)' : 'none',
+                      transition: 'var(--transition)',
+                      flexShrink: 0
                     }}
                   >
-                    <Send size={15} /> ส่ง
+                    <Send size={16} /> ส่งข้อความ
                   </button>
                 </div>
               </form>

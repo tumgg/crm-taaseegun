@@ -169,7 +169,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${activeTab === 'chat' ? 'chat-mode' : ''}`}>
       {/* Global Header & Navigation */}
       <Header
         activeTab={activeTab}
@@ -186,7 +186,7 @@ export default function App() {
       />
 
       {/* Main Content Area based on Tab */}
-      <main>
+      <main className="app-main-content">
         {activeTab === 'chat' && (
           <UnifiedChatCenter
             leads={leads}

@@ -26,9 +26,10 @@ export default function Header({
 }) {
   return (
     <header style={{
-      marginBottom: '16px',
+      marginBottom: activeTab === 'chat' ? '8px' : '16px',
       borderBottom: '1px solid var(--border-subtle)',
-      paddingBottom: '12px'
+      paddingBottom: activeTab === 'chat' ? '8px' : '12px',
+      flexShrink: 0
     }}>
       {/* Top Bar */}
       <div style={{
@@ -36,8 +37,8 @@ export default function Header({
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '14px',
-        marginBottom: '12px'
+        gap: '12px',
+        marginBottom: activeTab === 'chat' ? '8px' : '12px'
       }}>
         {/* Brand identity */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -88,9 +89,11 @@ export default function Header({
                 <span className="live-dot"></span> Live
               </span>
             </div>
-            <p style={{ fontSize: '0.84rem', color: '#64748b', marginTop: '2px' }}>
-              ระบบศูนย์กลางตอบแชทและบริหารจัดการลูกค้าโซเชียลมีเดียหลายเพจสำหรับทีมงาน
-            </p>
+            {activeTab !== 'chat' && (
+              <p style={{ fontSize: '0.84rem', color: '#64748b', marginTop: '2px' }}>
+                ระบบศูนย์กลางตอบแชทและบริหารจัดการลูกค้าโซเชียลมีเดียหลายเพจสำหรับทีมงาน
+              </p>
+            )}
           </div>
         </div>
 
