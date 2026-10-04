@@ -30,7 +30,13 @@ import {
   Bot,
   RefreshCw
 } from 'lucide-react';
-import { leadStatusOptions, quickReplyTemplates, interactionTypeOptions } from '../data/mockData';
+import { 
+  leadStatusOptions, 
+  quickReplyTemplates, 
+  interactionTypeOptions,
+  REAL_GOOD_VIBES_PAGE_ID,
+  REAL_GOOD_VIBES_TOKEN 
+} from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
 import { fetchLiveFacebookConversations } from '../utils/facebookLiveSync';
@@ -57,9 +63,30 @@ export default function UnifiedChatCenter({
 
   // Sync real live conversations from Meta Graph API
   const handleSyncRealFacebook = async () => {
-    const connectedPage = facebookPages.find(p => p.activePageToken && p.activePageToken.startsWith('EAA'));
+    const isValidToken = (t) => typeof t === 'string' && t.startsWith('EAA') && !t.includes('...') && t.length > 50;
+
+    // 1. Look for a page that has a verified, real active token
+    let connectedPage = facebookPages.find(p => isValidToken(p.activePageToken));
+
+    // 2. Fallback to Good Vibes Texture page with verified token
     if (!connectedPage) {
-      alert('ยังไม่พบเพจที่ใส่ Access Token กรุณาไปที่แท็บ "ตั้งค่า & เชื่อมต่อ API" เพื่อใส่ Token ก่อนครับ');
+      const goodVibes = facebookPages.find(p => p.id === REAL_GOOD_VIBES_PAGE_ID);
+      if (goodVibes) {
+        connectedPage = {
+          ...goodVibes,
+          activePageToken: REAL_GOOD_VIBES_TOKEN
+        };
+      } else {
+        connectedPage = {
+          id: REAL_GOOD_VIBES_PAGE_ID,
+          name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes',
+          activePageToken: REAL_GOOD_VIBES_TOKEN
+        };
+      }
+    }
+
+    if (!connectedPage || !isValidToken(connectedPage.activePageToken)) {
+      alert('ยังไม่พบเพจที่ใส่ Access Token ที่ถูกต้อง กรุณาไปที่แท็บ "วิธีเชื่อมต่อ API ส่งข้อความ & หลายเพจ" เพื่อใส่ Token ก่อนครับ');
       return;
     }
 
@@ -421,10 +448,10 @@ export default function UnifiedChatCenter({
               cursor: isSyncingFb ? 'not-allowed' : 'pointer',
               opacity: isSyncingFb ? 0.75 : 1
             }}
-            title="ดึงข้อความจริงจาก Inbox เพจ Facebook ที่เชื่อมต่อไว้เข้ามาทันที"
+            title="ดึงข้อความจริงล่าสุดจาก Inbox เพจ Good Vibes Texture ที่เชื่อมต่อ Meta API ไว้"
           >
             <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
-            {isSyncingFb ? 'กำลังดึงแชทจริง...' : '⚡ ดึงแชทสดจากเพจ Facebook'}
+            {isSyncingFb ? 'กำลังดึงแชทจริง...' : '⚡ ดึงแชทสดจากเพจ Facebook (Good Vibes)'}
           </button>
 
           <button

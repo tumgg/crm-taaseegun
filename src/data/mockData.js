@@ -1,8 +1,11 @@
 // Data structures and mock data for OmniSocial Hub
 
+export const REAL_GOOD_VIBES_PAGE_ID = '113532784994486';
+export const REAL_GOOD_VIBES_TOKEN = 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXmFNrU2RIZASiV4YvZC1W3dmZAcfAxnZCC4ZA7ptk6r0WpKMBlnDRKBli8yzdZCLDBl77QQU58Wie0yZAYBNcWPNaLmZCl41bfe87zfeTj2qacppOOdnxyZAZAbpnpApaoBZCQtousIhkRpUuPGryfZAevGVXW6Ip2x0jijS4sKyb';
+
 export const initialFacebookPages = [
   {
-    id: '113532784994486',
+    id: REAL_GOOD_VIBES_PAGE_ID,
     name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes',
     handle: '@goodvibes.texturepaint',
     category: 'ช่างพ่นสีเทกเจอร์ / ตกแต่งผนัง',
@@ -11,7 +14,7 @@ export const initialFacebookPages = [
     reach: 98000,
     engagementRate: '5.8%',
     growthRate: '+18.4%',
-    activePageToken: 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXmFNrU2RIZASiV4YvZC1W3dmZAcfAxnZCC4ZA7ptk6r0WpKMBlnDRKBli8yzdZCLDBl77QQU58Wie0yZAYBNcWPNaLmZCl41bfe87zfeTj2qacppOOdnxyZAZAbpnpApaoBZCQtousIhkRpUuPGryfZAevGVXW6Ip2x0jijS4sKyb',
+    activePageToken: REAL_GOOD_VIBES_TOKEN,
     demographics: {
       gender: { women: 45, men: 52, other: 3 },
       ageRange: [
@@ -51,7 +54,7 @@ export const initialFacebookPages = [
     reach: 245000,
     engagementRate: '6.4%',
     growthRate: '+22.1%',
-    activePageToken: 'EAAZ...Live (Connected)',
+    activePageToken: '',
     demographics: {
       gender: { women: 40, men: 57, other: 3 },
       ageRange: [
@@ -91,7 +94,7 @@ export const initialFacebookPages = [
     reach: 142000,
     engagementRate: '5.1%',
     growthRate: '+16.5%',
-    activePageToken: 'EAAZ...Live (Connected)',
+    activePageToken: '',
     demographics: {
       gender: { women: 58, men: 39, other: 3 },
       ageRange: [
@@ -130,7 +133,7 @@ export const initialFacebookPages = [
     reach: 185000,
     engagementRate: '4.9%',
     growthRate: '+12.7%',
-    activePageToken: 'EAAZ...Live (Connected)',
+    activePageToken: '',
     demographics: {
       gender: { women: 48, men: 49, other: 3 },
       ageRange: [
@@ -169,7 +172,7 @@ export const initialFacebookPages = [
     reach: 82000,
     engagementRate: '5.4%',
     growthRate: '+15.2%',
-    activePageToken: 'EAAZ...Live (Connected)',
+    activePageToken: '',
     demographics: {
       gender: { women: 42, men: 55, other: 3 },
       ageRange: [
@@ -206,7 +209,7 @@ export const initialFacebookPages = [
     reach: 125000,
     engagementRate: '7.8%',
     growthRate: '+24.5%',
-    activePageToken: 'EAAZ...Live (Connected)',
+    activePageToken: '',
     demographics: {
       gender: { women: 65, men: 32, other: 3 },
       ageRange: [
@@ -244,7 +247,7 @@ export const initialFacebookPages = [
     reach: 164000,
     engagementRate: '6.9%',
     growthRate: '+19.8%',
-    activePageToken: 'EAAZ...Live (Connected)',
+    activePageToken: '',
     demographics: {
       gender: { women: 62, men: 35, other: 3 },
       ageRange: [

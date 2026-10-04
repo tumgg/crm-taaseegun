@@ -50,7 +50,7 @@ export default function ApiIntegrationGuide({ facebookPages, setFacebookPages })
       reach: 45000,
       engagementRate: '4.5%',
       growthRate: '+10.0%',
-      activePageToken: newPageToken.trim() ? `${newPageToken.substring(0, 8)}... (Custom Token)` : 'EAA... (Live Connected)',
+      activePageToken: newPageToken.trim(),
       demographics: {
         gender: { women: 50, men: 47, other: 3 },
         ageRange: [
@@ -92,6 +92,16 @@ export default function ApiIntegrationGuide({ facebookPages, setFacebookPages })
   const handleRemovePage = (pageId, pageName) => {
     if (confirm(`คุณต้องการลบเพจ "${pageName}" ออกจากระบบแดชบอร์ดใช่หรือไม่?`)) {
       setFacebookPages(prev => prev.filter(p => p.id !== pageId));
+    }
+  };
+
+  const handleEditToken = (pageId, pageName) => {
+    const currentPage = facebookPages.find(p => p.id === pageId);
+    const tokenInput = prompt(`ใส่ Meta Page Access Token สำหรับเพจ "${pageName}":`, currentPage?.activePageToken || '');
+    if (tokenInput !== null) {
+      const cleanToken = tokenInput.trim();
+      setFacebookPages(prev => prev.map(p => p.id === pageId ? { ...p, activePageToken: cleanToken } : p));
+      alert(`บันทึก Token สำหรับเพจ "${pageName}" เรียบร้อยแล้ว!`);
     }
   };
 
@@ -482,13 +492,17 @@ export default function ApiIntegrationGuide({ facebookPages, setFacebookPages })
                     <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
                       {page.handle} • {page.category}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '2px', fontWeight: '500' }}>
-                      🔑 Token: {page.activePageToken}
+                    <div style={{ fontSize: '0.78rem', color: page.activePageToken && page.activePageToken.length > 50 ? '#16a34a' : '#94a3b8', marginTop: '3px', fontWeight: '600' }}>
+                      {page.activePageToken && page.activePageToken.length > 50 ? (
+                        <span>🟢 เชื่อมต่อแล้ว (Token: {page.activePageToken.slice(0, 10)}...{page.activePageToken.slice(-6)})</span>
+                      ) : (
+                        <span>⚪ ยังไม่มี Token</span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.95rem' }}>
                       {page.followers.toLocaleString()} ผู้ติดตาม
@@ -499,15 +513,32 @@ export default function ApiIntegrationGuide({ facebookPages, setFacebookPages })
                   </div>
 
                   <button
+                    onClick={() => handleEditToken(page.id, page.name)}
+                    style={{
+                      padding: '7px 12px',
+                      backgroundColor: '#eff6ff',
+                      color: '#2563eb',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      border: '1px solid #bfdbfe',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔑 {page.activePageToken && page.activePageToken.length > 50 ? 'เปลี่ยน Token' : 'ใส่ Token'}
+                  </button>
+
+                  <button
                     onClick={() => handleRemovePage(page.id, page.name)}
                     style={{
-                      padding: '8px 12px',
+                      padding: '7px 11px',
                       backgroundColor: '#fef2f2',
                       color: '#ef4444',
                       borderRadius: '8px',
-                      fontSize: '0.8rem',
+                      fontSize: '0.78rem',
                       fontWeight: '600',
-                      border: '1px solid #fecaca'
+                      border: '1px solid #fecaca',
+                      cursor: 'pointer'
                     }}
                   >
                     ลบเพจ
