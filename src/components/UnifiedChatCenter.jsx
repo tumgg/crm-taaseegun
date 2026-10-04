@@ -107,10 +107,7 @@ export default function UnifiedChatCenter({
         }
 
         setSelectedLeadId(realLeads[0].id);
-        setToastNotification({
-          title: `🎉 ซิงค์แชทจริงสำเร็จ!`,
-          message: `ดึง ${realLeads.length} บทสนทนาจริงจากเพจ "${connectedPage.name}" เข้ามาในระบบแล้ว!`
-        });
+        setToastNotification(`🎉 ซิงค์แชทจริงสำเร็จ! ดึง ${realLeads.length} บทสนทนาจริงจากเพจ "${connectedPage.name}" เข้ามาในระบบแล้ว!`);
         setTimeout(() => setToastNotification(null), 6000);
       }
     } catch (err) {
@@ -142,8 +139,8 @@ export default function UnifiedChatCenter({
   // Filter conversations
   const filteredConversations = leads.filter(lead => {
     const matchesSearch = 
-      lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.inquiry.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (lead.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (lead.inquiry || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (lead.sourceTitle && lead.sourceTitle.toLowerCase().includes(searchQuery.toLowerCase()));
 
     let matchesType = true;
@@ -360,7 +357,7 @@ export default function UnifiedChatCenter({
           border: '1px solid #334155'
         }}>
           <Bell size={18} color="#f59e0b" />
-          <span>{toastNotification}</span>
+          <span>{typeof toastNotification === 'object' && toastNotification !== null ? `${toastNotification.title || ''} ${toastNotification.message || ''}` : toastNotification}</span>
         </div>
       )}
 
@@ -1133,7 +1130,7 @@ export default function UnifiedChatCenter({
                 {/* Send Follow-up template button */}
                 <button
                   onClick={() => {
-                    const name = activeLead.name.replace(/\(.*?\)/g, '').trim();
+                    const name = (activeLead.name || 'ลูกค้า').replace(/\(.*?\)/g, '').trim();
                     setReplyText(`สวัสดีครับคุณ${name} ทางเราขออนุญาตติดตามเรื่องข้อเสนอและเรทการ์ดที่ส่งให้ก่อนหน้านี้ครับ สะดวกพิจารณาหรือมีคำถามตรงไหนเพิ่มเติมไหมครับผม 😊`);
                   }}
                   style={{
