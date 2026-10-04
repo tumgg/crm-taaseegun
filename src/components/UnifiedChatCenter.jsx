@@ -450,25 +450,6 @@ export default function UnifiedChatCenter({
             <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
             {isSyncingFb ? 'กำลังดึงแชทจริง...' : '⚡ ดึงแชทสดจากเพจ Facebook (Good Vibes)'}
           </button>
-
-          <button
-            onClick={handleSimulateIncomingMessage}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 14px',
-              borderRadius: '8px',
-              backgroundColor: '#f59e0b',
-              color: '#ffffff',
-              fontSize: '0.8rem',
-              fontWeight: '700',
-              boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)'
-            }}
-            title="กดเพื่อทดสอบเสียงเตือนและระบบ AI รับข้อความสด"
-          >
-            <Zap size={14} /> ทดสอบจำลองลูกค้าทัก
-          </button>
         </div>
       </div>
 

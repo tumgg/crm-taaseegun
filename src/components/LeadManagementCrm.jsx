@@ -276,7 +276,7 @@ export default function LeadManagementCrm({
           <div className="metric-title">ลูกค้าติดต่อทั้งหมด (Total Inbound)</div>
           <div className="metric-value">{totalLeads} ราย</div>
           <div className="metric-sub" style={{ color: '#3b82f6' }}>
-            จาก {facebookPages.length} เพจ FB + YT + TikTok
+            จากเพจ Facebook จริง ({facebookPages[0]?.name || 'Good Vibes Texture'})
           </div>
         </div>
 
@@ -475,15 +475,12 @@ export default function LeadManagementCrm({
                 color: '#1e293b'
               }}
             >
-              <option value="all">🌐 ทุกเพจและช่องทาง</option>
-              <option value="all-fb">📘 รวมทุกเพจ Facebook ({facebookPages.length} เพจ)</option>
+              <option value="all">🌐 ทุกข้อความจากเพจจริง</option>
               {facebookPages.map(page => (
                 <option key={page.id} value={page.id}>
-                  └ 📄 {page.name}
+                  📄 {page.name}
                 </option>
               ))}
-              <option value="youtube">▶ YouTube Inquiries & Comments</option>
-              <option value="tiktok">🎵 TikTok Comments & DMs</option>
             </select>
           </div>
 

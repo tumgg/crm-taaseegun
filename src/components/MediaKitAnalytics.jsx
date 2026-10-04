@@ -137,44 +137,6 @@ export default function MediaKitAnalytics({ facebookPages, onSelectPageForCrm })
         marginBottom: '20px',
         overflowX: 'auto'
       }}>
-        {/* Instagram Tab */}
-        <button
-          onClick={() => setSelectedPlatform('instagram')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            fontSize: '0.92rem',
-            fontWeight: selectedPlatform === 'instagram' ? '700' : '500',
-            color: selectedPlatform === 'instagram' ? '#c026d3' : '#64748b',
-            borderBottom: selectedPlatform === 'instagram' ? '3px solid #c026d3' : '3px solid transparent',
-            marginBottom: '-6px',
-            transition: 'var(--transition)'
-          }}
-        >
-          <span>📷</span> Instagram
-        </button>
-
-        {/* YouTube Tab */}
-        <button
-          onClick={() => setSelectedPlatform('youtube')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            fontSize: '0.92rem',
-            fontWeight: selectedPlatform === 'youtube' ? '700' : '500',
-            color: selectedPlatform === 'youtube' ? '#dc2626' : '#64748b',
-            borderBottom: selectedPlatform === 'youtube' ? '3px solid #dc2626' : '3px solid transparent',
-            marginBottom: '-6px',
-            transition: 'var(--transition)'
-          }}
-        >
-          <span style={{ color: '#dc2626' }}>▶</span> YouTube
-        </button>
-
         {/* Facebook Tab */}
         <button
           onClick={() => setSelectedPlatform('facebook')}
@@ -184,33 +146,14 @@ export default function MediaKitAnalytics({ facebookPages, onSelectPageForCrm })
             gap: '8px',
             padding: '10px 18px',
             fontSize: '0.92rem',
-            fontWeight: selectedPlatform === 'facebook' ? '700' : '500',
-            color: selectedPlatform === 'facebook' ? '#1877f2' : '#64748b',
-            borderBottom: selectedPlatform === 'facebook' ? '3px solid #1877f2' : '3px solid transparent',
+            fontWeight: '700',
+            color: '#1877f2',
+            borderBottom: '3px solid #1877f2',
             marginBottom: '-6px',
             transition: 'var(--transition)'
           }}
         >
-          <span style={{ color: '#1877f2' }}>📘</span> Facebook ({facebookPages.length} เพจ)
-        </button>
-
-        {/* TikTok Tab */}
-        <button
-          onClick={() => setSelectedPlatform('tiktok')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            fontSize: '0.92rem',
-            fontWeight: selectedPlatform === 'tiktok' ? '700' : '500',
-            color: selectedPlatform === 'tiktok' ? '#0f172a' : '#64748b',
-            borderBottom: selectedPlatform === 'tiktok' ? '3px solid #0f172a' : '3px solid transparent',
-            marginBottom: '-6px',
-            transition: 'var(--transition)'
-          }}
-        >
-          <span>🎵</span> TikTok
+          <span style={{ color: '#1877f2' }}>📘</span> เพจ Facebook จริง ({facebookPages[0]?.name || 'Good Vibes Texture'})
         </button>
       </div>
 
