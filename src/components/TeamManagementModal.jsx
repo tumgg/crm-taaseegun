@@ -1,19 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Users, 
   UserPlus, 
   Trash2, 
-  Key, 
   Copy, 
   Check, 
   X, 
-  ShieldCheck, 
   Eye, 
   EyeOff, 
-  Mail, 
-  User, 
-  Sparkles,
-  Lock
+  Lock,
+  Camera,
+  Upload,
+  Link as LinkIcon,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const AVATAR_OPTIONS = [
@@ -43,9 +42,65 @@ export default function TeamManagementModal({
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('sales');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_OPTIONS[3]);
+  const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Password editing state
   const [editingPasswordId, setEditingPasswordId] = useState(null);
   const [tempNewPassword, setTempNewPassword] = useState('');
+
+  const newFileInputRef = useRef(null);
+
+  // Compress & resize image to max 200x200 JPEG to keep localStorage fast & lightweight
+  const processImageFile = (file, callback) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพเท่านั้นครับ (JPG, PNG, WebP)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 220;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        callback(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (!isOpen) return null;
+
+  const togglePassword = (id) => {
+    setShowPasswordMap(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   const handleStartEditPassword = (member) => {
     setEditingPasswordId(member.id);
@@ -63,17 +118,35 @@ export default function TeamManagementModal({
     alert('เปลี่ยนรหัสผ่านสำเร็จแล้ว!');
   };
 
-  if (!isOpen) return null;
+  // Upload photo for an existing team member in the list
+  const handleExistingMemberPhotoUpload = (memberId, file) => {
+    processImageFile(file, (dataUrl) => {
+      const updated = teamMembers.map(m => m.id === memberId ? { ...m, avatar: dataUrl } : m);
+      onSaveTeamMembers(updated);
+      alert('อัปเดตเปลี่ยนรูปโปรไฟล์เรียบร้อยแล้วครับ!');
+    });
+  };
 
-  const togglePassword = (id) => {
-    setShowPasswordMap(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+  // Upload photo for a new team member
+  const handleNewMemberPhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file, (dataUrl) => {
+        setSelectedAvatar(dataUrl);
+      });
+    }
+  };
+
+  // Apply custom URL for new member avatar
+  const handleApplyCustomUrl = () => {
+    if (customAvatarUrl.trim()) {
+      setSelectedAvatar(customAvatarUrl.trim());
+    }
   };
 
   const handleCopyCredentials = (member) => {
-    const text = `🌐 ข้อมูลเข้าสู่ระบบ CRM (${window.location.hostname || 'crm.taaseegun.com'})\nURL: https://crm.taaseegun.com\nUsername: ${member.username}\nPassword: ${member.password}\nตำแหน่ง: ${member.roleLabel}`;
+    const originUrl = window.location.origin || 'https://crm-taaseegun.vercel.app';
+    const text = `🌐 ข้อมูลเข้าสู่ระบบ CRM (${window.location.hostname || 'crm.taaseegun.com'})\nURL: ${originUrl}\nUsername: ${member.username}\nPassword: ${member.password}\nตำแหน่ง: ${member.roleLabel}`;
     navigator.clipboard?.writeText(text);
     setCopiedId(member.id);
     setTimeout(() => setCopiedId(null), 2500);
@@ -108,7 +181,7 @@ export default function TeamManagementModal({
       password: password.trim(),
       role: role,
       roleLabel: roleLabel,
-      avatar: selectedAvatar
+      avatar: selectedAvatar || AVATAR_OPTIONS[0]
     };
 
     const updated = [...teamMembers, newMember];
@@ -120,7 +193,10 @@ export default function TeamManagementModal({
     setEmail('');
     setPassword('');
     setRole('sales');
+    setSelectedAvatar(AVATAR_OPTIONS[0]);
+    setCustomAvatarUrl('');
     setActiveTab('list');
+    alert(`เพิ่มทีมงาน "${newMember.name}" เรียบร้อยแล้ว!`);
   };
 
   const handleDeleteMember = (memberId, memberName) => {
@@ -155,8 +231,8 @@ export default function TeamManagementModal({
         style={{
           backgroundColor: '#ffffff',
           width: '100%',
-          maxWidth: '680px',
-          maxHeight: '90vh',
+          maxWidth: '700px',
+          maxHeight: '92vh',
           borderRadius: '20px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
@@ -191,7 +267,7 @@ export default function TeamManagementModal({
                 จัดการทีมงาน & สิทธิ์เข้าใช้งาน (crm.taaseegun.com)
               </h3>
               <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                กำหนดสิทธิ์และออกรหัสผ่านให้ทีมงานแอดมินสำหรับเข้าสู่ระบบ
+                กำหนดสิทธิ์, ออกรหัสผ่าน และเปลี่ยนรูปโปรไฟล์ให้ทีมงานแอดมิน
               </p>
             </div>
           </div>
@@ -284,17 +360,53 @@ export default function TeamManagementModal({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <img
-                      src={member.avatar || AVATAR_OPTIONS[0]}
-                      alt={member.name}
-                      style={{
-                        width: '46px',
-                        height: '46px',
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        border: '2px solid #e2e8f0'
-                      }}
-                    />
+                    {/* Member Avatar with Change Photo Overlay */}
+                    <div style={{ position: 'relative', width: '48px', height: '48px' }}>
+                      <img
+                        src={member.avatar || AVATAR_OPTIONS[0]}
+                        alt={member.name}
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          border: '2px solid #e2e8f0',
+                          backgroundColor: '#f1f5f9'
+                        }}
+                      />
+                      <label
+                        title="คลิกเพื่ออัปโหลดเปลี่ยนรูปโปรไฟล์คนนี้"
+                        style={{
+                          position: 'absolute',
+                          bottom: '-2px',
+                          right: '-2px',
+                          backgroundColor: '#1877f2',
+                          color: '#ffffff',
+                          borderRadius: '50%',
+                          width: '20px',
+                          height: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                          border: '2px solid #ffffff'
+                        }}
+                      >
+                        <Camera size={11} />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              handleExistingMemberPhotoUpload(member.id, e.target.files[0]);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#0f172a' }}>
@@ -315,7 +427,8 @@ export default function TeamManagementModal({
                         <span>ID/Username: <strong>{member.username}</strong></span>
                         <span>อีเมล: {member.email}</span>
                       </div>
-                      {/* Password line */}
+
+                      {/* Password Line */}
                       <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <Lock size={13} color="#94a3b8" />
                         <span>รหัสผ่าน: </span>
@@ -471,7 +584,7 @@ export default function TeamManagementModal({
                 color: '#1e40af',
                 lineHeight: '1.5'
               }}>
-                💡 <strong>เคล็ดลับสำหรับพี่ตั้ม:</strong> เมื่อเพิ่มแอดมินใหม่แล้ว สามารถกดปุ่ม <strong>"คัดลอกส่งทีม"</strong> เพื่อนำข้อความ Username และ Password ไปส่งให้ทีมงานใน LINE หรือแชทได้ทันทีครับ!
+                💡 <strong>เคล็ดลับสำหรับพี่ตั้ม:</strong> สามารถคลิกที่ไอคอนกล้อง 📷 ตรงรูปโปรไฟล์ของแอดมินแต่ละคน เพื่อเลือกอัปโหลดรูปภาพจริงจากในคอมหรือมือถือเปลี่ยนได้ทันทีครับ!
               </div>
             </div>
           ) : (
@@ -495,7 +608,7 @@ export default function TeamManagementModal({
                 </label>
                 <input
                   type="text"
-                  placeholder="เช่น แอดมินเมย์, ทีมขายหนึ่ง"
+                  placeholder="เช่น แอดมินตู่จัง, ทีมขายหนึ่ง"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   style={{
@@ -516,7 +629,7 @@ export default function TeamManagementModal({
                   </label>
                   <input
                     type="text"
-                    placeholder="เช่น may, sale01"
+                    placeholder="เช่น too@admintaaseegun.com, sale01"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     style={{
@@ -536,7 +649,7 @@ export default function TeamManagementModal({
                   </label>
                   <input
                     type="text"
-                    placeholder="เช่น pass1234, admin2026"
+                    placeholder="เช่น 12345678, pass2026"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     style={{
@@ -581,7 +694,7 @@ export default function TeamManagementModal({
                   </label>
                   <input
                     type="email"
-                    placeholder="เช่น may@taaseegun.com"
+                    placeholder="เช่น too@taaseegun.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     style={{
@@ -595,34 +708,156 @@ export default function TeamManagementModal({
                 </div>
               </div>
 
-              {/* Avatar selection */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
-                  เลือกรูปโปรไฟล์ประจำตัว
+              {/* Enhanced Avatar Selection: Upload from file / Custom URL / Preset Avatars */}
+              <div style={{
+                backgroundColor: '#f8fafc',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>
+                  รูปโปรไฟล์ประจำตัว (เลือกอัปโหลดรูปเอง หรือเลือกจากตัวอย่าง)
                 </label>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  {AVATAR_OPTIONS.map((imgUrl, idx) => (
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  {/* Current Selected Avatar Preview */}
+                  <div style={{ position: 'relative' }}>
                     <img
-                      key={idx}
-                      src={imgUrl}
-                      alt={`Avatar option ${idx + 1}`}
-                      onClick={() => setSelectedAvatar(imgUrl)}
+                      src={selectedAvatar || AVATAR_OPTIONS[0]}
+                      alt="Selected Avatar Preview"
                       style={{
-                        width: '42px',
-                        height: '42px',
+                        width: '64px',
+                        height: '64px',
                         borderRadius: '50%',
-                        cursor: 'pointer',
-                        border: selectedAvatar === imgUrl ? '3px solid #1877f2' : '2px solid transparent',
-                        transform: selectedAvatar === imgUrl ? 'scale(1.1)' : 'scale(1)',
-                        transition: 'transform 0.15s'
+                        objectFit: 'cover',
+                        border: '3px solid #1877f2',
+                        boxShadow: '0 4px 10px rgba(24, 119, 242, 0.25)',
+                        backgroundColor: '#ffffff'
                       }}
                     />
-                  ))}
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '-2px',
+                      right: '-2px',
+                      backgroundColor: '#10b981',
+                      color: '#ffffff',
+                      borderRadius: '50%',
+                      width: '20px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '2px solid #ffffff'
+                    }}>
+                      <Check size={12} />
+                    </div>
+                  </div>
+
+                  {/* Upload from Computer / Mobile Button */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => newFileInputRef.current?.click()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        backgroundColor: '#1877f2',
+                        color: '#ffffff',
+                        fontSize: '0.85rem',
+                        fontWeight: '700',
+                        border: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(24, 119, 242, 0.25)'
+                      }}
+                    >
+                      <Upload size={16} />
+                      📁 อัปโหลดรูปภาพจากเครื่อง
+                    </button>
+                    <input
+                      ref={newFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={handleNewMemberPhotoUpload}
+                    />
+                    <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                      รองรับไฟล์ JPG, PNG, WebP (ย่อขนาดอัตโนมัติให้คมชัดและโหลดไว)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Or Custom URL Input */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <LinkIcon size={14} style={{ position: 'absolute', left: '10px', top: '12px', color: '#94a3b8' }} />
+                      <input
+                        type="url"
+                        placeholder="หรือวางลิงก์รูปภาพจากเว็บ (https://...)"
+                        value={customAvatarUrl}
+                        onChange={(e) => setCustomAvatarUrl(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px 8px 32px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.82rem',
+                          backgroundColor: '#ffffff'
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyCustomUrl}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: '#f1f5f9',
+                        color: '#334155',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.82rem',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ใช้รูปจากลิงก์
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preset Avatars */}
+                <div>
+                  <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: '6px' }}>
+                    หรือเลือกจากอวตารตัวอย่างสำเร็จรูป:
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {AVATAR_OPTIONS.map((imgUrl, idx) => (
+                      <img
+                        key={idx}
+                        src={imgUrl}
+                        alt={`Avatar option ${idx + 1}`}
+                        onClick={() => setSelectedAvatar(imgUrl)}
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          border: selectedAvatar === imgUrl ? '3px solid #1877f2' : '2px solid transparent',
+                          transform: selectedAvatar === imgUrl ? 'scale(1.12)' : 'scale(1)',
+                          transition: 'transform 0.15s',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Submit Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
                 <button
                   type="button"
                   onClick={() => setActiveTab('list')}

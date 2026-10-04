@@ -44,10 +44,16 @@ export default function App() {
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [selectedChannelFilter, setSelectedChannelFilter] = useState('all');
 
-  // Auto-save team members to localStorage
+  // Auto-save team members to localStorage and sync current user profile
   const handleSaveTeamMembers = (updatedMembers) => {
     setTeamMembers(updatedMembers);
     localStorage.setItem('omnisocial_team_accounts', JSON.stringify(updatedMembers));
+    if (currentUser) {
+      const match = updatedMembers.find(m => m.id === currentUser.id);
+      if (match) {
+        setCurrentUser(match);
+      }
+    }
   };
 
   // Auto-save to localStorage on any lead or page updates
