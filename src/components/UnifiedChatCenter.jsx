@@ -46,6 +46,7 @@ import {
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
 import { fetchLiveFacebookConversations, sendFacebookMessengerReply } from '../utils/facebookLiveSync';
+import { supabase } from '../utils/supabaseClient';
 
 export default function UnifiedChatCenter({ 
   leads, 
@@ -215,6 +216,113 @@ export default function UnifiedChatCenter({
     }, 30000);
     return () => clearInterval(interval);
   }, [isAutoSyncEnabled, facebookPages, isSoundEnabled]);
+
+  const [isRealtimeWebhookActive, setIsRealtimeWebhookActive] = useState(false);
+
+  // Subscribe to Instant 1-Second Real-Time Webhook Messages via Supabase Realtime
+  useEffect(() => {
+    const channel = supabase
+      .channel('live-facebook-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'live_facebook_messages' },
+        (payload) => {
+          const newRow = payload.new;
+          if (!newRow) return;
+
+          console.log('⚡ [1-Second Realtime Event Received]:', newRow);
+          setIsRealtimeWebhookActive(true);
+
+          const timeStr = new Date(newRow.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const dateStr = new Date(newRow.created_at || Date.now()).toISOString().slice(0, 10);
+
+          const newIncomingMessage = {
+            id: newRow.message_mid || `msg-${Date.now()}`,
+            sender: 'lead',
+            text: newRow.message_text,
+            time: timeStr
+          };
+
+          const matchedPageName = newRow.raw_event?.pageName || 
+            (newRow.page_id === REAL_GOOD_VIBES_PAGE_ID ? 'Good Vibes' :
+             newRow.page_id === REAL_TAASEEGUN_PAGE_ID ? 'ทาสีกัน' :
+             newRow.page_id === REAL_ROOMS_PAINTING_PAGE_ID ? 'RoomsPainting' :
+             newRow.page_id === REAL_TEXTURE_BEAR_PAGE_ID ? 'ช่างหมี เทกเจอร์' : 'เพจ Facebook');
+
+          let isFound = false;
+
+          setLeads((prev) => {
+            const updated = prev.map((lead) => {
+              const isMatch = (lead.customerPsid && lead.customerPsid === newRow.sender_psid) ||
+                (lead.id && lead.id.includes(newRow.sender_psid)) ||
+                (lead.name && newRow.sender_name && lead.name === newRow.sender_name);
+
+              if (isMatch) {
+                isFound = true;
+                const existingMsgs = lead.messages || [];
+                if (existingMsgs.some(m => m.id === newIncomingMessage.id || (m.text === newIncomingMessage.text && m.time === newIncomingMessage.time))) {
+                  return lead;
+                }
+                return {
+                  ...lead,
+                  inquiry: newRow.message_text,
+                  date: `${dateStr} ${timeStr}`,
+                  status: 'ทักใหม่ (New)',
+                  customerPsid: newRow.sender_psid,
+                  messages: [...existingMsgs, newIncomingMessage]
+                };
+              }
+              return lead;
+            });
+
+            if (!isFound) {
+              const brandNewLead = {
+                id: `fb-live-${newRow.sender_psid}`,
+                name: newRow.sender_name || `ลูกค้าใหม่ Facebook #${newRow.sender_psid.slice(-4)}`,
+                platform: 'facebook',
+                channel: newRow.page_id,
+                channelName: matchedPageName,
+                sourceType: 'inbox',
+                sourceTitle: 'Messenger Inbox (Live 1s)',
+                sourceLink: `https://www.facebook.com/${newRow.page_id}/inbox/`,
+                contact: 'Facebook Messenger',
+                inquiry: newRow.message_text,
+                dealValue: 0,
+                status: 'ทักใหม่ (New)',
+                date: `${dateStr} ${timeStr}`,
+                followUpDate: null,
+                admin: 'แอดมินเพจ',
+                notes: `ทักสดผ่าน Webhook จากเพจ ${matchedPageName}`,
+                isLiveFacebookLead: true,
+                unreadCount: 1,
+                tag: 'ลูกค้าใหม่สดๆ 1 วิ',
+                customerPsid: newRow.sender_psid,
+                messages: [newIncomingMessage]
+              };
+              return [brandNewLead, ...updated];
+            }
+
+            return updated;
+          });
+
+          if (isSoundEnabled) {
+            playNotificationSound();
+          }
+
+          setToastNotification(`⚡ [สด 1 วินาที] ข้อความใหม่จาก "${newRow.sender_name || 'ลูกค้า'}" (${matchedPageName}): "${newRow.message_text}"`);
+          setTimeout(() => setToastNotification(null), 6000);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsRealtimeWebhookActive(true);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isSoundEnabled]);
   
   const chatMessagesContainerRef = useRef(null);
 
@@ -612,6 +720,33 @@ export default function UnifiedChatCenter({
             }} />
             Auto-Sync 30s: {isAutoSyncEnabled ? 'ON' : 'OFF'}
           </button>
+
+          {/* Instant 1-Second Real-Time Webhook Badge */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 11px',
+              borderRadius: '8px',
+              backgroundColor: isRealtimeWebhookActive ? '#f0fdf4' : '#f8fafc',
+              color: isRealtimeWebhookActive ? '#15803d' : '#64748b',
+              fontSize: '0.76rem',
+              fontWeight: '700',
+              border: isRealtimeWebhookActive ? '1.5px solid #86efac' : '1px solid #cbd5e1'
+            }}
+            title="ระบบ Webhook เชื่อมต่อสดกับ Supabase Realtime พร้อมผลักข้อความลูกค้าเข้าหน้าจอใน 1 วินาที"
+          >
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isRealtimeWebhookActive ? '#22c55e' : '#94a3b8',
+              display: 'inline-block',
+              boxShadow: isRealtimeWebhookActive ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none'
+            }} />
+            ⚡ สด 1 วิ: {isRealtimeWebhookActive ? 'พร้อมรับข้อความทันที' : 'กำลังเชื่อมต่อ'}
+          </div>
         </div>
       </div>
 
