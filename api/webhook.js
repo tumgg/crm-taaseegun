@@ -68,7 +68,11 @@ export default async function handler(req, res) {
             // Only handle customer incoming messages (ignore echo or page self-messages)
             if (event.message && event.sender && event.sender.id !== pageId && !event.message.is_echo) {
               const senderPsid = event.sender.id;
-              const text = event.message.text || (event.message.attachments ? '(ส่งไฟล์แนบ/รูปภาพ)' : 'ข้อความใหม่');
+              const rawAtts = event.message.attachments || [];
+              const hasImages = rawAtts.some(a => a.type === 'image' || a.payload?.sticker_id);
+              const hasVideos = rawAtts.some(a => a.type === 'video');
+              const hasFiles = rawAtts.length > 0;
+              const text = event.message.text || (hasImages ? '🖼️ [ส่งรูปภาพ]' : (hasVideos ? '🎥 [ส่งวิดีโอ]' : (hasFiles ? '📎 [ส่งไฟล์แนบ]' : 'ข้อความใหม่')));
               const mid = event.message.mid || `mid_${Date.now()}_${Math.random()}`;
 
               // Try fetching customer profile name from Facebook
@@ -93,7 +97,7 @@ export default async function handler(req, res) {
                 recipient_id: event.recipient?.id || pageId,
                 message_mid: mid,
                 message_text: text,
-                attachments: event.message.attachments || [],
+                attachments: rawAtts,
                 raw_event: {
                   ...event,
                   pageName
@@ -128,7 +132,9 @@ export default async function handler(req, res) {
                 const commentId = val.comment_id;
                 const commenterName = val.from?.name || 'ลูกค้า Facebook ใต้โพสต์';
                 const commenterId = val.from?.id || commentId;
-                const commentText = val.message || '(สติกเกอร์/รูปภาพใต้โพสต์)';
+                const photoUrl = val.photo || val.attachment?.media?.image?.src || null;
+                const commentAtts = photoUrl ? [{ type: 'image', payload: { url: photoUrl } }] : [];
+                const commentText = val.message || (photoUrl ? '🖼️ [ส่งรูปภาพใต้โพสต์]' : '(สติกเกอร์/รูปภาพใต้โพสต์)');
                 const postId = val.post_id || val.parent_id;
 
                 const insertPayload = {
@@ -138,7 +144,7 @@ export default async function handler(req, res) {
                   recipient_id: pageId,
                   message_mid: commentId || `comment_${Date.now()}_${Math.random()}`,
                   message_text: commentText,
-                  attachments: [],
+                  attachments: commentAtts,
                   raw_event: {
                     isComment: true,
                     commentId: commentId,

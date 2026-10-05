@@ -29,7 +29,11 @@ import {
   Bell,
   Zap,
   Bot,
-  RefreshCw
+  RefreshCw,
+  Image as ImageIcon,
+  Download,
+  X,
+  Maximize2
 } from 'lucide-react';
 import { 
   leadStatusOptions, 
@@ -49,8 +53,11 @@ import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant
 import { 
   fetchLiveFacebookConversations, 
   sendFacebookMessengerReply, 
+  sendFacebookAttachment,
   replyToFacebookComment, 
-  sendFacebookPrivateReply 
+  replyToFacebookCommentWithAttachment,
+  sendFacebookPrivateReply,
+  normalizeAttachment
 } from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
 
@@ -153,6 +160,42 @@ export default function UnifiedChatCenter({
     return false;
   });
   const [mobileTab, setMobileTab] = useState('list'); // 'list' | 'chat' | 'profile'
+
+  // Attachments State (Viewing & Sending)
+  const [selectedAttachment, setSelectedAttachment] = useState(null); // { file, name, size, type, previewUrl }
+  const [isSendingAttachment, setIsSendingAttachment] = useState(false);
+  const [selectedImageModal, setSelectedImageModal] = useState(null); // { url, name, date, sender }
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      alert('ไฟล์มีขนาดเกิน 25MB ซึ่งเป็นขีดจำกัดของ Facebook Messenger ครับ');
+      return;
+    }
+
+    const isImg = file.type.startsWith('image/');
+    const isVid = file.type.startsWith('video/');
+    setSelectedAttachment({
+      file,
+      name: file.name,
+      size: file.size,
+      type: isImg ? 'image' : (isVid ? 'video' : 'file'),
+      previewUrl: isImg ? URL.createObjectURL(file) : null
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemoveAttachment = () => {
+    if (selectedAttachment?.previewUrl) {
+      URL.revokeObjectURL(selectedAttachment.previewUrl);
+    }
+    setSelectedAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
@@ -335,10 +378,25 @@ export default function UnifiedChatCenter({
           const timeStr = new Date(newRow.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const dateStr = new Date(newRow.created_at || Date.now()).toISOString().slice(0, 10);
 
+          // Parse attachments if delivered via Webhook
+          const rawAtts = Array.isArray(newRow.attachments) ? newRow.attachments : [];
+          const parsedAtts = rawAtts.map(att => normalizeAttachment(att)).filter(Boolean);
+
+          let displayText = newRow.message_text;
+          if (!displayText || displayText.startsWith('(') || displayText.includes('ส่งไฟล์แนบ')) {
+            if (parsedAtts.length > 0) {
+              if (parsedAtts.some(a => a.isSticker)) displayText = '🏷️ สติกเกอร์';
+              else if (parsedAtts.some(a => a.type === 'image')) displayText = '🖼️ รูปภาพ';
+              else if (parsedAtts.some(a => a.type === 'video')) displayText = '🎥 วิดีโอ';
+              else displayText = '📎 ไฟล์แนบ';
+            }
+          }
+
           const newIncomingMessage = {
             id: newRow.message_mid || `msg-${Date.now()}`,
             sender: 'lead',
-            text: newRow.message_text,
+            text: displayText,
+            attachments: parsedAtts,
             time: timeStr
           };
 
@@ -366,7 +424,7 @@ export default function UnifiedChatCenter({
                 }
                 return {
                   ...lead,
-                  inquiry: newRow.message_text,
+                  inquiry: displayText,
                   date: `${dateStr} ${timeStr}`,
                   status: 'ทักใหม่ (New)',
                   customerPsid: newRow.sender_psid,
@@ -485,16 +543,34 @@ export default function UnifiedChatCenter({
       : activeLead.inquiry
   ) : null;
 
-  // Handle Send Message
+  // Handle Send Message & Attachments
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if (!replyText.trim() || !activeLead) return;
+    if ((!replyText.trim() && !selectedAttachment) || !activeLead) return;
 
     const messageTextToSend = replyText.trim();
+    const attachmentToSend = selectedAttachment ? { ...selectedAttachment } : null;
+
+    // Build optimistic message with attachments
+    const optimisticAttachments = attachmentToSend ? [{
+      id: `att-admin-${Date.now()}`,
+      type: attachmentToSend.type,
+      name: attachmentToSend.name,
+      size: attachmentToSend.size,
+      url: attachmentToSend.previewUrl || (attachmentToSend.file ? URL.createObjectURL(attachmentToSend.file) : null),
+      previewUrl: attachmentToSend.previewUrl || (attachmentToSend.file ? URL.createObjectURL(attachmentToSend.file) : null)
+    }] : [];
+
+    let displayMsgText = messageTextToSend;
+    if (!displayMsgText && optimisticAttachments.length > 0) {
+      displayMsgText = optimisticAttachments[0].type === 'image' ? '🖼️ รูปภาพ' : '📎 ไฟล์แนบ';
+    }
+
     const newMessage = {
       id: `msg-${Date.now()}`,
       sender: 'admin',
-      text: messageTextToSend,
+      text: displayMsgText,
+      attachments: optimisticAttachments,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       adminName: activeAdminName,
       isCommentReply: replyMode === 'comment'
@@ -510,6 +586,7 @@ export default function UnifiedChatCenter({
         return {
           ...lead,
           status: nextStatus,
+          inquiry: displayMsgText || lead.inquiry,
           messages: [...existingMessages, newMessage]
         };
       }
@@ -518,8 +595,9 @@ export default function UnifiedChatCenter({
 
     setLeads(updatedLeads);
     setReplyText('');
+    handleRemoveAttachment();
 
-    // If real live Facebook lead, attempt real API message/comment delivery
+    // If real live Facebook lead, attempt real API message/attachment delivery
     const pageToken = activeLead.activePageToken || 
       (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
        activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
@@ -527,27 +605,46 @@ export default function UnifiedChatCenter({
        activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
 
     if (pageToken) {
+      setIsSendingAttachment(true);
       try {
         if (activeLead.sourceType === 'post_comment' && activeLead.commentId) {
-          if (replyMode === 'comment') {
-            // 1. Reply publicly under the Facebook Post Comment
-            await replyToFacebookComment(pageToken, activeLead.commentId, messageTextToSend);
-            setToastNotification(`✅ ตอบกลับใต้คอมเมนต์ของ "${activeLead.name}" หน้าเพจสำเร็จแล้ว!`);
+          if (attachmentToSend?.file) {
+            // Reply under comment with photo
+            await replyToFacebookCommentWithAttachment(pageToken, activeLead.commentId, attachmentToSend.file, messageTextToSend);
+            setToastNotification(`✅ ตอบกลับพร้อมแนบรูปภาพใต้คอมเมนต์ของ "${activeLead.name}" สำเร็จ!`);
           } else {
-            // 2. Reply privately into customer's Messenger Inbox from the comment
-            await sendFacebookPrivateReply(pageToken, activeLead.commentId, messageTextToSend);
-            setToastNotification(`✅ ส่งข้อความส่วนตัวเข้า Inbox ของ "${activeLead.name}" สำเร็จ!`);
+            if (replyMode === 'comment') {
+              // 1. Reply publicly under the Facebook Post Comment
+              await replyToFacebookComment(pageToken, activeLead.commentId, messageTextToSend);
+              setToastNotification(`✅ ตอบกลับใต้คอมเมนต์ของ "${activeLead.name}" หน้าเพจสำเร็จแล้ว!`);
+            } else {
+              // 2. Reply privately into customer's Messenger Inbox from the comment
+              await sendFacebookPrivateReply(pageToken, activeLead.commentId, messageTextToSend);
+              setToastNotification(`✅ ส่งข้อความส่วนตัวเข้า Inbox ของ "${activeLead.name}" สำเร็จ!`);
+            }
           }
         } else if (activeLead.customerPsid && replyMode === 'inbox') {
           // 3. Regular Messenger Inbox reply
-          await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
-          setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
+          if (attachmentToSend?.file) {
+            // Send file/photo first
+            await sendFacebookAttachment(pageToken, activeLead.customerPsid, attachmentToSend.file);
+            // If admin also entered text, send text message as well
+            if (messageTextToSend) {
+              await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
+            }
+            setToastNotification(`✅ ส่งรูปภาพ/ไฟล์แนบตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
+          } else {
+            await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
+            setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
+          }
         }
         setTimeout(() => setToastNotification(null), 5000);
       } catch (sendErr) {
         console.warn('Facebook reply warning:', sendErr);
-        setToastNotification(`บันทึกในระบบแล้ว (หมายเหตุ Facebook: ${sendErr.message || 'ลูกค้าทักมาเกิน 24 ชม.'})`);
+        setToastNotification(`บันทึกในระบบแล้ว (หมายเหตุ Facebook: ${sendErr.message || 'ส่งผ่าน API ไม่สำเร็จ'})`);
         setTimeout(() => setToastNotification(null), 6000);
+      } finally {
+        setIsSendingAttachment(false);
       }
     }
 
@@ -1150,9 +1247,19 @@ export default function UnifiedChatCenter({
                 const isSelected = lead.id === activeLead?.id;
                 const hasUnread = lead.status.includes('New') || lead.status.includes('ทักใหม่');
                 const hasDueFollowUp = isFollowUpDue(lead.followUpDate);
-                const lastMsg = lead.messages && lead.messages.length > 0 
-                  ? lead.messages[lead.messages.length - 1].text 
-                  : lead.inquiry;
+                const lastMsgObj = lead.messages && lead.messages.length > 0 
+                  ? lead.messages[lead.messages.length - 1] 
+                  : null;
+                let lastMsg = lastMsgObj ? lastMsgObj.text : lead.inquiry;
+                if (lastMsgObj && lastMsgObj.attachments?.length > 0 && (!lastMsg || lastMsg.startsWith('(') || lastMsg.includes('ไฟล์แนบ') || lastMsg.includes('รูปภาพ'))) {
+                  const firstAtt = lastMsgObj.attachments[0];
+                  lastMsg = firstAtt.isSticker ? '🏷️ [สติกเกอร์]' : (firstAtt.type === 'image' ? '🖼️ [ส่งรูปภาพ]' : (firstAtt.type === 'video' ? '🎥 [ส่งวิดีโอ]' : '📎 [ส่งไฟล์แนบ]'));
+                } else if (!lastMsg && lead.inquiry) {
+                  lastMsg = lead.inquiry;
+                }
+                if (typeof lastMsg === 'string' && (lastMsg === '(ไฟล์แนบ / สติกเกอร์)' || lastMsg === '(ส่งไฟล์แนบ/รูปภาพ)')) {
+                  lastMsg = '🖼️ [ส่งรูปภาพ / สติกเกอร์]';
+                }
                 const theme = getPageTheme(lead.channel);
 
                 return (
@@ -1545,9 +1652,153 @@ export default function UnifiedChatCenter({
                           )}
                         </div>
 
-                        <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                          {msg.text}
-                        </div>
+                        {/* Render Attachments (Images, Stickers, Videos, Documents) */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            margin: (msg.text && !msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ') ? '6px 0' : '2px 0'
+                          }}>
+                            {msg.attachments.map((att, attIdx) => {
+                              if (att.type === 'image') {
+                                if (att.isSticker) {
+                                  return (
+                                    <img
+                                      key={att.id || attIdx}
+                                      src={att.previewUrl || att.url}
+                                      alt="Sticker"
+                                      style={{
+                                        width: '105px',
+                                        height: '105px',
+                                        objectFit: 'contain',
+                                        display: 'block'
+                                      }}
+                                    />
+                                  );
+                                }
+                                return (
+                                  <div
+                                    key={att.id || attIdx}
+                                    onClick={() => setSelectedImageModal({
+                                      url: att.url || att.previewUrl,
+                                      name: att.name || 'รูปภาพ',
+                                      date: msg.time,
+                                      sender: isAdmin ? (msg.adminName || 'แอดมิน') : activeLead.name
+                                    })}
+                                    style={{
+                                      position: 'relative',
+                                      borderRadius: '10px',
+                                      overflow: 'hidden',
+                                      cursor: 'pointer',
+                                      maxWidth: '280px',
+                                      maxHeight: '260px',
+                                      backgroundColor: '#0f172a',
+                                      boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                      border: isAdmin ? '1px solid rgba(255,255,255,0.2)' : '1px solid #e2e8f0'
+                                    }}
+                                    title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                                  >
+                                    <img
+                                      src={att.previewUrl || att.url}
+                                      alt={att.name || 'รูปภาพแนบ'}
+                                      loading="lazy"
+                                      style={{
+                                        width: '100%',
+                                        maxHeight: '260px',
+                                        objectFit: 'cover',
+                                        display: 'block',
+                                        transition: 'transform 0.2s ease'
+                                      }}
+                                      onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                      onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1.0)'}
+                                    />
+                                    <div style={{
+                                      position: 'absolute',
+                                      bottom: '6px',
+                                      right: '6px',
+                                      backgroundColor: 'rgba(0,0,0,0.65)',
+                                      color: '#ffffff',
+                                      padding: '2px 7px',
+                                      borderRadius: '6px',
+                                      fontSize: '0.68rem',
+                                      fontWeight: '600',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      backdropFilter: 'blur(4px)'
+                                    }}>
+                                      <Maximize2 size={11} /> ขยายรูป
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              if (att.type === 'video') {
+                                return (
+                                  <video
+                                    key={att.id || attIdx}
+                                    src={att.url}
+                                    controls
+                                    style={{
+                                      maxWidth: '280px',
+                                      borderRadius: '10px',
+                                      border: '1px solid rgba(0,0,0,0.1)'
+                                    }}
+                                  />
+                                );
+                              }
+
+                              // Document or generic file
+                              return (
+                                <a
+                                  key={att.id || attIdx}
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={att.name || 'document'}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 12px',
+                                    backgroundColor: isAdmin ? 'rgba(255,255,255,0.18)' : '#f8fafc',
+                                    color: isAdmin ? '#ffffff' : '#0f172a',
+                                    borderRadius: '8px',
+                                    textDecoration: 'none',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '600',
+                                    border: isAdmin ? '1px solid rgba(255,255,255,0.3)' : '1px solid #cbd5e1'
+                                  }}
+                                >
+                                  <FileText size={18} />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                      {att.name || 'ดาวน์โหลดเอกสาร'}
+                                    </div>
+                                    {att.size && (
+                                      <div style={{ fontSize: '0.68rem', opacity: 0.8 }}>
+                                        {(att.size / 1024).toFixed(0)} KB
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Download size={14} />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Show text message if not just a placeholder */}
+                        {msg.text && (
+                          !msg.attachments || 
+                          msg.attachments.length === 0 || 
+                          (!msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ')
+                        ) && (
+                          <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
+                            {msg.text}
+                          </div>
+                        )}
 
                         <div style={{
                           fontSize: '0.68rem',
@@ -1639,7 +1890,123 @@ export default function UnifiedChatCenter({
                 flexShrink: 0,
                 boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
               }}>
+                {/* File Attachment Preview Banner */}
+                {selectedAttachment && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: '#eff6ff',
+                    border: '1.5px dashed #3b82f6',
+                    borderRadius: '10px',
+                    marginBottom: '4px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      {selectedAttachment.previewUrl ? (
+                        <img
+                          src={selectedAttachment.previewUrl}
+                          alt="Attachment Preview"
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                            border: '1px solid #bfdbfe'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '6px',
+                          backgroundColor: '#dbeafe',
+                          color: '#1d4ed8',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <FileText size={22} />
+                        </div>
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '0.82rem',
+                          fontWeight: '700',
+                          color: '#1e3a8a',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: isMobile ? '180px' : '360px'
+                        }}>
+                          {selectedAttachment.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                          {(selectedAttachment.size / 1024).toFixed(1)} KB • พร้อมส่งเข้า Facebook Messenger
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRemoveAttachment}
+                      style={{
+                        backgroundColor: '#fee2e2',
+                        border: 'none',
+                        color: '#ef4444',
+                        borderRadius: '50%',
+                        width: '26px',
+                        height: '26px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                      title="ยกเลิกไฟล์แนบ"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
+                    style={{ display: 'none' }}
+                  />
+
+                  {/* Attachment Button */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      padding: isMobile ? '0 10px' : '0 14px',
+                      height: '52px',
+                      borderRadius: '10px',
+                      border: selectedAttachment ? '2px solid #2563eb' : '1.5px solid #cbd5e1',
+                      backgroundColor: selectedAttachment ? '#eff6ff' : '#f8fafc',
+                      color: selectedAttachment ? '#2563eb' : '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      fontSize: '0.84rem',
+                      fontWeight: '600',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="แนบรูปภาพหรือไฟล์เอกสาร (ส่งเข้า Facebook Messenger)"
+                  >
+                    <Paperclip size={18} />
+                    {!isMobile && <span>{selectedAttachment ? 'เปลี่ยนไฟล์' : 'แนบไฟล์'}</span>}
+                  </button>
+
                   <textarea
                     rows="2"
                     value={replyText}
@@ -1650,7 +2017,7 @@ export default function UnifiedChatCenter({
                         handleSendMessage();
                       }
                     }}
-                    placeholder={`พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Enter เพื่อส่ง, Shift+Enter ขึ้นบรรทัดใหม่)`}
+                    placeholder={selectedAttachment ? `พิมพ์ข้อความอธิบายไฟล์ (หรือไม่พิมพ์ก็ได้)...` : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Enter เพื่อส่ง)`}
                     style={{
                       flex: 1,
                       padding: '9px 12px',
@@ -1674,11 +2041,11 @@ export default function UnifiedChatCenter({
 
                   <button
                     type="submit"
-                    disabled={!replyText.trim()}
+                    disabled={(!replyText.trim() && !selectedAttachment) || isSendingAttachment}
                     style={{
                       padding: '0 18px',
                       borderRadius: '10px',
-                      backgroundColor: replyText.trim() ? activeTheme.primary : '#cbd5e1',
+                      backgroundColor: (replyText.trim() || selectedAttachment) ? activeTheme.primary : '#cbd5e1',
                       color: '#ffffff',
                       fontWeight: '700',
                       fontSize: '0.88rem',
@@ -1686,14 +2053,22 @@ export default function UnifiedChatCenter({
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      cursor: replyText.trim() ? 'pointer' : 'not-allowed',
+                      cursor: ((replyText.trim() || selectedAttachment) && !isSendingAttachment) ? 'pointer' : 'not-allowed',
                       height: '52px',
-                      boxShadow: replyText.trim() ? `0 2px 8px ${activeTheme.primary}40` : 'none',
+                      boxShadow: (replyText.trim() || selectedAttachment) ? `0 2px 8px ${activeTheme.primary}40` : 'none',
                       transition: 'var(--transition)',
                       flexShrink: 0
                     }}
                   >
-                    <Send size={16} /> ส่งข้อความ
+                    {isSendingAttachment ? (
+                      <>
+                        <RefreshCw size={16} className="spin-anim" /> กำลังส่งไฟล์...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} /> ส่งข้อความ
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -1951,6 +2326,114 @@ export default function UnifiedChatCenter({
           ) : null}
         </div>
       </div>
+
+      {/* Full-Screen Image Lightbox Modal */}
+      {selectedImageModal && (
+        <div 
+          onClick={() => setSelectedImageModal(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.88)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {/* Modal Header */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '900px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              color: '#ffffff',
+              marginBottom: '12px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontWeight: '700', fontSize: '0.96rem' }}>{selectedImageModal.sender}</span>
+              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>• {selectedImageModal.date}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <a
+                href={selectedImageModal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={selectedImageModal.name || 'image.jpg'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.18)',
+                  color: '#ffffff',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  textDecoration: 'none',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.18)'}
+              >
+                <Download size={14} /> ดาวน์โหลดรูปต้นฉบับ
+              </a>
+              <button
+                onClick={() => setSelectedImageModal(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="ปิด (Esc)"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Image */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '82vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.6)'
+            }}
+          >
+            <img
+              src={selectedImageModal.url}
+              alt="Full View"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '82vh',
+                objectFit: 'contain',
+                display: 'block',
+                borderRadius: '8px'
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
