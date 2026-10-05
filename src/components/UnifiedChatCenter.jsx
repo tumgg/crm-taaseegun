@@ -147,7 +147,7 @@ export default function UnifiedChatCenter({
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [isSyncingFb, setIsSyncingFb] = useState(false);
-  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(true);
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== 'undefined') return window.innerWidth < 900;
     return false;
@@ -299,14 +299,22 @@ export default function UnifiedChatCenter({
     }
   };
 
-  // Background Auto-sync effect (every 30 seconds if enabled)
+  // Background Auto-sync effect (every 10 seconds in background)
   useEffect(() => {
     if (!isAutoSyncEnabled) return;
     const interval = setInterval(() => {
       handleSyncRealFacebook(true);
-    }, 30000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [isAutoSyncEnabled, facebookPages, isSoundEnabled]);
+
+  // Initial background sync on mount (after 1.5 seconds)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSyncRealFacebook(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const [isRealtimeWebhookActive, setIsRealtimeWebhookActive] = useState(false);
 
@@ -542,6 +550,11 @@ export default function UnifiedChatCenter({
         setTimeout(() => setToastNotification(null), 6000);
       }
     }
+
+    // Schedule background sync 3 seconds after sending to immediately pull any incoming response
+    setTimeout(() => {
+      handleSyncRealFacebook(true);
+    }, 3000);
   };
 
   // AI Smart Draft Reply Generator
@@ -809,7 +822,7 @@ export default function UnifiedChatCenter({
               const nextState = !isAutoSyncEnabled;
               setIsAutoSyncEnabled(nextState);
               if (nextState) {
-                setToastNotification('🟢 เปิดระบบ Auto-Sync: คอยดึงแชทใหม่ทุก 30 วินาทีอัตโนมัติ');
+                setToastNotification('🟢 เปิดระบบ Auto-Sync: คอยดึงแชทใหม่อัตโนมัติทุก 10 วินาที');
                 setTimeout(() => setToastNotification(null), 4000);
               } else {
                 setToastNotification('⚪ ปิดระบบ Auto-Sync เรียบร้อย');
@@ -829,7 +842,7 @@ export default function UnifiedChatCenter({
               border: isAutoSyncEnabled ? '1.5px solid #10b981' : '1px solid #cbd5e1',
               cursor: 'pointer'
             }}
-            title="เปิด/ปิดการเช็กแชทใหม่ให้อัตโนมัติทุก 30 วินาทีในพื้นหลัง"
+            title="เปิด/ปิดการเช็กแชทใหม่ให้อัตโนมัติทุก 10 วินาทีในพื้นหลัง"
           >
             <span style={{
               width: '8px',
@@ -838,7 +851,7 @@ export default function UnifiedChatCenter({
               backgroundColor: isAutoSyncEnabled ? '#10b981' : '#94a3b8',
               display: 'inline-block'
             }} />
-            Auto-Sync 30s: {isAutoSyncEnabled ? 'ON' : 'OFF'}
+            Auto-Sync 10s: {isAutoSyncEnabled ? 'ON' : 'OFF'}
           </button>
 
           {/* Instant 1-Second Real-Time Webhook Badge */}
