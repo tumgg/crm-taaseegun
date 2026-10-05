@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Send, 
   Search, 
@@ -808,6 +808,18 @@ export default function UnifiedChatCenter({
     return target <= today;
   };
 
+  // Helper to determine if a conversation has been replied to (our team/admin answered last)
+  const isLeadReplied = (lead) => {
+    if (!lead) return false;
+    const msgs = lead.messages;
+    if (msgs && msgs.length > 0) {
+      const lastMsg = msgs[msgs.length - 1];
+      return lastMsg.sender === 'admin';
+    }
+    // If no message thread yet, inquiry was initiated by customer => unreplied
+    return false;
+  };
+
   // Filter conversations and sort so the TRULY latest activity is on top across all pages
   const filteredConversations = sortLeadsByLatest(
     leads.filter(lead => {
@@ -819,6 +831,10 @@ export default function UnifiedChatCenter({
       let matchesType = true;
       if (filterType === 'due_followup') {
         matchesType = isFollowUpDue(lead.followUpDate);
+      } else if (filterType === 'unreplied') {
+        matchesType = !isLeadReplied(lead);
+      } else if (filterType === 'replied') {
+        matchesType = isLeadReplied(lead);
       } else if (filterType !== 'all') {
         matchesType = lead.sourceType === filterType;
       }
@@ -1101,6 +1117,21 @@ export default function UnifiedChatCenter({
   };
 
   const dueFollowUpsCount = leads.filter(l => isFollowUpDue(l.followUpDate)).length;
+
+  // Counts of unreplied vs replied conversations (respecting current channel filter)
+  const unrepliedCount = useMemo(() => {
+    return leads.filter(l => {
+      const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? l.platform === 'facebook' : l.channel === filterChannel);
+      return matchesChannel && !isLeadReplied(l);
+    }).length;
+  }, [leads, filterChannel]);
+
+  const repliedCount = useMemo(() => {
+    return leads.filter(l => {
+      const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? l.platform === 'facebook' : l.channel === filterChannel);
+      return matchesChannel && isLeadReplied(l);
+    }).length;
+  }, [leads, filterChannel]);
 
   return (
     <div className="animate-fade-in chat-center-root" style={{ position: 'relative' }}>
@@ -1445,7 +1476,7 @@ export default function UnifiedChatCenter({
             </div>
 
             {/* Filter Pills */}
-            <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
               <button
                 onClick={() => setFilterType('all')}
                 style={{
@@ -1455,10 +1486,58 @@ export default function UnifiedChatCenter({
                   fontWeight: filterType === 'all' ? '700' : '500',
                   backgroundColor: filterType === 'all' ? '#0f172a' : '#ffffff',
                   color: filterType === 'all' ? '#ffffff' : '#64748b',
-                  border: '1px solid #cbd5e1'
+                  border: '1px solid #cbd5e1',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer'
                 }}
               >
                 ทั้งหมด
+              </button>
+              <button
+                onClick={() => setFilterType('unreplied')}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: filterType === 'unreplied' ? '800' : '600',
+                  backgroundColor: filterType === 'unreplied' ? '#dc2626' : (unrepliedCount > 0 ? '#fef2f2' : '#ffffff'),
+                  color: filterType === 'unreplied' ? '#ffffff' : (unrepliedCount > 0 ? '#dc2626' : '#64748b'),
+                  border: filterType === 'unreplied' ? '1px solid #dc2626' : '1px solid #fecaca',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="กรองดูเฉพาะข้อความที่ยังไม่ได้ตอบลูกค้า"
+              >
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: filterType === 'unreplied' ? '#ffffff' : '#ef4444'
+                }} />
+                รอตอบ ({unrepliedCount})
+              </button>
+              <button
+                onClick={() => setFilterType('replied')}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: filterType === 'replied' ? '800' : '500',
+                  backgroundColor: filterType === 'replied' ? '#16a34a' : '#ffffff',
+                  color: filterType === 'replied' ? '#ffffff' : '#16a34a',
+                  border: filterType === 'replied' ? '1px solid #16a34a' : '1px solid #bbf7d0',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px'
+                }}
+                title="กรองดูแชทที่ตอบกลับแล้ว"
+              >
+                <Check size={11} strokeWidth={3} /> ตอบแล้ว ({repliedCount})
               </button>
               <button
                 onClick={() => setFilterType('due_followup')}
@@ -1467,9 +1546,11 @@ export default function UnifiedChatCenter({
                   borderRadius: '6px',
                   fontSize: '0.72rem',
                   fontWeight: filterType === 'due_followup' ? '700' : '500',
-                  backgroundColor: filterType === 'due_followup' ? '#dc2626' : '#ffffff',
-                  color: filterType === 'due_followup' ? '#ffffff' : '#dc2626',
-                  border: '1px solid #fecaca'
+                  backgroundColor: filterType === 'due_followup' ? '#ea580c' : '#ffffff',
+                  color: filterType === 'due_followup' ? '#ffffff' : '#ea580c',
+                  border: '1px solid #fed7aa',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer'
                 }}
               >
                 ⏰ ถึงเวลาตาม ({dueFollowUpsCount})
@@ -1483,7 +1564,9 @@ export default function UnifiedChatCenter({
                   fontWeight: filterType === 'video_comment' ? '700' : '500',
                   backgroundColor: filterType === 'video_comment' ? '#f59e0b' : '#ffffff',
                   color: filterType === 'video_comment' ? '#ffffff' : '#b45309',
-                  border: '1px solid #fde68a'
+                  border: '1px solid #fde68a',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer'
                 }}
               >
                 🎬 ใต้คลิป
@@ -1497,7 +1580,9 @@ export default function UnifiedChatCenter({
                   fontWeight: filterType === 'inbox' ? '700' : '500',
                   backgroundColor: filterType === 'inbox' ? '#1877f2' : '#ffffff',
                   color: filterType === 'inbox' ? '#ffffff' : '#1d4ed8',
-                  border: '1px solid #bfdbfe'
+                  border: '1px solid #bfdbfe',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer'
                 }}
               >
                 📥 Inbox
@@ -1541,7 +1626,7 @@ export default function UnifiedChatCenter({
             ) : (
               filteredConversations.map(lead => {
                 const isSelected = lead.id === activeLead?.id;
-                const hasUnread = lead.status.includes('New') || lead.status.includes('ทักใหม่');
+                const isReplied = isLeadReplied(lead);
                 const hasDueFollowUp = isFollowUpDue(lead.followUpDate);
                 const lastMsgObj = lead.messages && lead.messages.length > 0 
                   ? lead.messages[lead.messages.length - 1] 
@@ -1570,12 +1655,23 @@ export default function UnifiedChatCenter({
                       margin: '4px 6px',
                       borderRadius: '12px',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
-                      borderLeft: isSelected ? '4px solid #1877f2' : (hasDueFollowUp ? '4px solid #ef4444' : '4px solid transparent'),
-                      borderTop: '1px solid #f1f5f9',
-                      borderRight: '1px solid #f1f5f9',
-                      borderBottom: '1px solid #f1f5f9',
-                      boxShadow: isSelected ? '0 2px 6px rgba(24, 119, 242, 0.12)' : '0 1px 2px rgba(0,0,0,0.02)',
+                      backgroundColor: isSelected ? '#eff6ff' : (!isReplied ? '#ffffff' : '#fafafa'),
+                      borderLeft: isSelected 
+                        ? '4px solid #1877f2' 
+                        : (hasDueFollowUp 
+                            ? '4px solid #dc2626' 
+                            : (!isReplied 
+                                ? '4px solid #ef4444' 
+                                : '4px solid #10b981'
+                              )),
+                      borderTop: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
+                      borderRight: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
+                      borderBottom: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
+                      boxShadow: isSelected 
+                        ? '0 2px 8px rgba(24, 119, 242, 0.15)' 
+                        : (!isReplied 
+                            ? '0 2px 6px rgba(239, 68, 68, 0.06)' 
+                            : '0 1px 2px rgba(0,0,0,0.02)'),
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px',
@@ -1583,36 +1679,78 @@ export default function UnifiedChatCenter({
                     }}
                     onMouseOver={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = '#f8fafc';
+                        e.currentTarget.style.backgroundColor = !isReplied ? '#fef2f2' : '#f1f5f9';
                         e.currentTarget.style.transform = 'translateY(-1px)';
                       }
                     }}
                     onMouseOut={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = '#ffffff';
+                        e.currentTarget.style.backgroundColor = !isReplied ? '#ffffff' : '#fafafa';
                         e.currentTarget.style.transform = 'translateY(0)';
                       }
                     }}
                   >
-                    {/* Customer Friendly Avatar Circle */}
+                    {/* Customer Friendly Avatar Circle with Reply Status Badge */}
                     {(() => {
                       const av = getAvatarBg(lead.name);
                       return (
-                        <div style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '50%',
-                          backgroundColor: av.bg,
-                          color: av.text,
-                          border: `1px solid ${av.border}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: '800',
-                          fontSize: '0.8rem',
-                          flexShrink: 0
-                        }}>
-                          {getInitials(lead.name)}
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            backgroundColor: av.bg,
+                            color: av.text,
+                            border: !isReplied ? '2px solid #f87171' : `1px solid ${av.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: '800',
+                            fontSize: '0.82rem'
+                          }}>
+                            {getInitials(lead.name)}
+                          </div>
+
+                          {/* Instant Signal: Red dot if Unreplied, Green check if Replied */}
+                          {!isReplied ? (
+                            <span 
+                              style={{
+                                position: 'absolute',
+                                top: '-2px',
+                                right: '-2px',
+                                width: '13px',
+                                height: '13px',
+                                borderRadius: '50%',
+                                backgroundColor: '#ef4444',
+                                border: '2px solid #ffffff',
+                                boxShadow: '0 0 0 1px #dc2626'
+                              }} 
+                              title="รอแอดมินตอบกลับ (ยังไม่ตอบ)"
+                            />
+                          ) : (
+                            <span 
+                              style={{
+                                position: 'absolute',
+                                bottom: '-2px',
+                                right: '-2px',
+                                width: '15px',
+                                height: '15px',
+                                borderRadius: '50%',
+                                backgroundColor: '#16a34a',
+                                color: '#ffffff',
+                                border: '2px solid #ffffff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.6rem',
+                                fontWeight: '900',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                              }} 
+                              title="แอดมินตอบลูกค้าแล้ว"
+                            >
+                              ✓
+                            </span>
+                          )}
                         </div>
                       );
                     })()}
@@ -1621,9 +1759,9 @@ export default function UnifiedChatCenter({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
                         <div style={{ 
-                          fontWeight: hasUnread || isSelected ? '800' : '700', 
-                          fontSize: '0.86rem', 
-                          color: isSelected ? '#1d4ed8' : '#0f172a', 
+                          fontWeight: !isReplied || isSelected ? '800' : '700', 
+                          fontSize: '0.87rem', 
+                          color: isSelected ? '#1d4ed8' : (!isReplied ? '#0f172a' : '#334155'), 
                           overflow: 'hidden', 
                           textOverflow: 'ellipsis', 
                           whiteSpace: 'nowrap' 
@@ -1632,8 +1770,8 @@ export default function UnifiedChatCenter({
                         </div>
                         <span style={{ 
                           fontSize: '0.70rem', 
-                          color: hasUnread ? '#2563eb' : '#64748b', 
-                          fontWeight: hasUnread ? '700' : '500', 
+                          color: !isReplied ? '#dc2626' : '#64748b', 
+                          fontWeight: !isReplied ? '700' : '500', 
                           whiteSpace: 'nowrap' 
                         }}>
                           {formatConversationTime(lead)}
@@ -1656,6 +1794,46 @@ export default function UnifiedChatCenter({
                           {theme.icon} {theme.shortName}
                         </span>
 
+                        {/* PROMINENT REPLY STATUS BADGE */}
+                        {!isReplied ? (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            padding: '1px 7px',
+                            borderRadius: '999px',
+                            backgroundColor: '#fef2f2',
+                            color: '#dc2626',
+                            fontWeight: '800',
+                            border: '1px solid #fecaca',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 1px 2px rgba(220, 38, 38, 0.06)'
+                          }}>
+                            <span style={{
+                              width: '5px',
+                              height: '5px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ef4444'
+                            }} />
+                            รอตอบ
+                          </span>
+                        ) : (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            padding: '1px 7px',
+                            borderRadius: '999px',
+                            backgroundColor: '#f0fdf4',
+                            color: '#16a34a',
+                            fontWeight: '700',
+                            border: '1px solid #bbf7d0',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
+                          }}>
+                            <Check size={11} strokeWidth={3} /> ตอบแล้ว
+                          </span>
+                        )}
+
                         {hasDueFollowUp && (
                           <span style={{
                             backgroundColor: '#fef2f2',
@@ -1673,8 +1851,8 @@ export default function UnifiedChatCenter({
 
                       <div style={{
                         fontSize: '0.76rem',
-                        color: hasUnread ? '#0f172a' : '#64748b',
-                        fontWeight: hasUnread ? '600' : '400',
+                        color: !isReplied ? '#0f172a' : '#64748b',
+                        fontWeight: !isReplied ? '700' : '400',
                         lineHeight: '1.3',
                         maxHeight: '32px',
                         overflow: 'hidden',
@@ -1684,6 +1862,15 @@ export default function UnifiedChatCenter({
                         WebkitBoxOrient: 'vertical',
                         wordBreak: 'break-word'
                       }}>
+                        {isReplied ? (
+                          <span style={{ color: '#059669', fontWeight: '700', marginRight: '3px' }}>
+                            ↩️ ตอบแล้ว:
+                          </span>
+                        ) : (
+                          <span style={{ color: '#dc2626', fontWeight: '800', marginRight: '3px' }}>
+                            💬 ลูกค้า:
+                          </span>
+                        )}
                         {lastMsg}
                       </div>
                     </div>
