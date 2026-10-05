@@ -7,7 +7,19 @@ import ApiIntegrationGuide from './components/ApiIntegrationGuide';
 import AddLeadModal from './components/AddLeadModal';
 import TeamManagementModal from './components/TeamManagementModal';
 import LoginScreen, { teamAccounts as defaultTeamAccounts } from './components/LoginScreen';
-import { initialFacebookPages, initialLeads } from './data/mockData';
+import { 
+  initialFacebookPages, 
+  initialLeads,
+  REAL_GOOD_VIBES_PAGE_ID, 
+  REAL_GOOD_VIBES_TOKEN,
+  REAL_TAASEEGUN_PAGE_ID, 
+  REAL_TAASEEGUN_TOKEN,
+  REAL_ROOMS_PAINTING_PAGE_ID, 
+  REAL_ROOMS_PAINTING_TOKEN,
+  REAL_TEXTURE_BEAR_PAGE_ID, 
+  REAL_TEXTURE_BEAR_TOKEN
+} from './data/mockData';
+import { fetchLiveFacebookConversations } from './utils/facebookLiveSync';
 import { 
   loadStoredLeads, 
   saveStoredLeads, 
@@ -73,6 +85,58 @@ export default function App() {
       localStorage.removeItem('omnisocial_current_user');
     }
   }, [currentUser]);
+
+  // Auto-fetch real Facebook conversations on app mount for all devices/admins
+  useEffect(() => {
+    async function autoFetchOnMount() {
+      try {
+        const pagesToSync = [
+          { id: REAL_GOOD_VIBES_PAGE_ID, name: 'รับพ่นสี Texture By Good Vibes', activePageToken: REAL_GOOD_VIBES_TOKEN },
+          { id: REAL_TAASEEGUN_PAGE_ID, name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี', activePageToken: REAL_TAASEEGUN_TOKEN },
+          { id: REAL_ROOMS_PAINTING_PAGE_ID, name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting', activePageToken: REAL_ROOMS_PAINTING_TOKEN },
+          { id: REAL_TEXTURE_BEAR_PAGE_ID, name: 'รับทำสีเทกเจอร์ by ช่างหมี', activePageToken: REAL_TEXTURE_BEAR_TOKEN }
+        ];
+
+        const syncPromises = pagesToSync.map(async (page) => {
+          try {
+            return await fetchLiveFacebookConversations(page.id, page.activePageToken, page.name);
+          } catch (err) {
+            console.warn(`Sync error for ${page.name}:`, err);
+            return [];
+          }
+        });
+
+        const results = await Promise.all(syncPromises);
+        const allFetchedLeads = results.flat().filter(Boolean);
+
+        if (allFetchedLeads.length > 0) {
+          setLeads(prev => {
+            const incomingMap = new Map(allFetchedLeads.map(l => [l.id, l]));
+            const updatedExisting = prev.map(oldLead => {
+              const incoming = incomingMap.get(oldLead.id);
+              if (!incoming) return oldLead;
+              incomingMap.delete(oldLead.id);
+              return {
+                ...oldLead,
+                ...incoming,
+                status: oldLead.status || incoming.status,
+                admin: oldLead.admin || incoming.admin,
+                dealValue: oldLead.dealValue || incoming.dealValue,
+                notes: oldLead.notes || incoming.notes,
+                messages: (incoming.messages && incoming.messages.length > 0) ? incoming.messages : oldLead.messages
+              };
+            });
+            const completelyNew = Array.from(incomingMap.values());
+            return [...completelyNew, ...updatedExisting];
+          });
+        }
+      } catch (err) {
+        console.warn('Auto fetch on app mount error:', err);
+      }
+    }
+
+    autoFetchOnMount();
+  }, []);
 
   // Set default selected lead
   useEffect(() => {

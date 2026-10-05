@@ -1124,7 +1124,26 @@ export default function UnifiedChatCenter({
           >
             {filteredConversations.length === 0 ? (
               <div style={{ padding: '30px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
-                ไม่พบบทสนทนาที่ตรงกัน
+                <div style={{ marginBottom: '8px', color: '#64748b' }}>
+                  {isSyncingFb ? '🔄 กำลังดึงแชทสดจาก Facebook ทุกเพจ...' : 'ไม่พบบทสนทนาที่ตรงกัน'}
+                </div>
+                {filterChannel !== 'all' && (
+                  <button
+                    onClick={() => setFilterChannel('all')}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      backgroundColor: '#eff6ff',
+                      color: '#1d4ed8',
+                      fontSize: '0.74rem',
+                      fontWeight: '700',
+                      border: '1px solid #bfdbfe',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    กดดูแชททุกเพจ
+                  </button>
+                )}
               </div>
             ) : (
               filteredConversations.map(lead => {
