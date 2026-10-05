@@ -192,110 +192,170 @@ export default function UnifiedChatCenter({
   });
   const [mobileTab, setMobileTab] = useState('list'); // 'list' | 'chat' | 'profile'
 
-  // Attachments State (Viewing & Sending Photos/Files)
-  const [selectedAttachment, setSelectedAttachment] = useState(null); // { file, name, size, type, previewUrl }
+  // Attachments State (Viewing & Sending Photos/Files - Supports Multiple Photos)
+  const [selectedAttachments, setSelectedAttachments] = useState([]); // Array of { id, file, name, size, type, previewUrl }
   const [isSendingAttachment, setIsSendingAttachment] = useState(false);
+  const [sendingProgress, setSendingProgress] = useState(null); // { current, total }
   const [selectedImageModal, setSelectedImageModal] = useState(null); // { url, name, date, sender }
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
-  // Dedicated Photo Selector (accept="image/*")
+  // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      alert('ไฟล์รูปภาพมีขนาดเกิน 25MB ซึ่งเป็นขีดจำกัดของ Facebook Messenger ครับ');
-      return;
+    const validFiles = [];
+    const oversizedNames = [];
+
+    for (const file of rawFiles) {
+      if (file.size > 25 * 1024 * 1024) {
+        oversizedNames.push(file.name);
+      } else {
+        validFiles.push(file);
+      }
     }
 
-    setSelectedAttachment({
-      file,
-      name: file.name,
-      size: file.size,
-      type: 'image',
-      previewUrl: URL.createObjectURL(file)
-    });
+    if (oversizedNames.length > 0) {
+      alert(`มีไฟล์ขนาดเกิน 25MB จำนวน ${oversizedNames.length} ไฟล์ ซึ่งไม่สามารถส่งผ่าน Facebook ได้:\n${oversizedNames.slice(0, 3).join(', ')}...`);
+    }
 
-    setToastNotification('📷 เลือกรูปภาพเรียบร้อยแล้ว พิมพ์ข้อความเพิ่มหรือกดส่งได้เลย!');
-    setTimeout(() => setToastNotification(null), 3500);
+    if (validFiles.length > 0) {
+      const newAttachments = validFiles.map((file, idx) => ({
+        id: `att-img-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+        file,
+        name: file.name,
+        size: file.size,
+        type: 'image',
+        previewUrl: URL.createObjectURL(file)
+      }));
+
+      setSelectedAttachments(prev => [...prev, ...newAttachments]);
+      setToastNotification(`📷 เพิ่มรูปภาพแล้ว ${validFiles.length} รูป (รวมทั้งหมด ${selectedAttachments.length + validFiles.length} รูปพร้อมส่ง)`);
+      setTimeout(() => setToastNotification(null), 3500);
+    }
 
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
-  // Dedicated Document/File Selector (PDF, DOC, ZIP)
+  // Dedicated Multi-Document/File Selector (PDF, DOC, ZIP)
   const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      alert('ไฟล์มีขนาดเกิน 25MB ซึ่งเป็นขีดจำกัดของ Facebook Messenger ครับ');
-      return;
+    const validFiles = [];
+    for (const file of rawFiles) {
+      if (file.size > 25 * 1024 * 1024) {
+        alert(`ไฟล์ "${file.name}" มีขนาดเกิน 25MB ครับ`);
+      } else {
+        validFiles.push(file);
+      }
     }
 
-    const isImg = file.type.startsWith('image/');
-    const isVid = file.type.startsWith('video/');
-    setSelectedAttachment({
-      file,
-      name: file.name,
-      size: file.size,
-      type: isImg ? 'image' : (isVid ? 'video' : 'file'),
-      previewUrl: isImg ? URL.createObjectURL(file) : null
-    });
+    if (validFiles.length > 0) {
+      const newAttachments = validFiles.map((file, idx) => {
+        const isImg = file.type.startsWith('image/');
+        const isVid = file.type.startsWith('video/');
+        return {
+          id: `att-file-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          file,
+          name: file.name,
+          size: file.size,
+          type: isImg ? 'image' : (isVid ? 'video' : 'file'),
+          previewUrl: isImg ? URL.createObjectURL(file) : null
+        };
+      });
 
-    setToastNotification(isImg ? '📷 แนบรูปภาพเรียบร้อยแล้ว' : '📎 แนบเอกสารเรียบร้อยแล้ว');
-    setTimeout(() => setToastNotification(null), 3500);
+      setSelectedAttachments(prev => [...prev, ...newAttachments]);
+      setToastNotification(`📎 เพิ่มไฟล์แนบแล้ว ${validFiles.length} ไฟล์`);
+      setTimeout(() => setToastNotification(null), 3500);
+    }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Support Pasting Images directly from Clipboard (Cmd+V / Ctrl+V)
+  // Support Pasting Images directly from Clipboard (Cmd+V / Ctrl+V) - Supports Multiple
   const handlePaste = (e) => {
     const items = e.clipboardData?.items;
-    if (!items) return;
+    if (!items || items.length === 0) return;
+
+    const pastedAttachments = [];
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith('image/')) {
         const file = items[i].getAsFile();
         if (file) {
-          e.preventDefault();
           const timeCode = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/:/g, '');
-          setSelectedAttachment({
+          pastedAttachments.push({
+            id: `att-paste-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
             file,
-            name: `รูปภาพ_${timeCode}.png`,
+            name: `รูปภาพ_${timeCode}_${i + 1}.png`,
             size: file.size,
             type: 'image',
             previewUrl: URL.createObjectURL(file)
           });
-          setToastNotification('📸 วางรูปภาพจาก Clipboard เรียบร้อยแล้ว พร้อมส่ง!');
-          setTimeout(() => setToastNotification(null), 3500);
-          break;
         }
       }
     }
+
+    if (pastedAttachments.length > 0) {
+      e.preventDefault();
+      setSelectedAttachments(prev => [...prev, ...pastedAttachments]);
+      setToastNotification(`📸 วางรูปภาพจาก Clipboard แล้ว ${pastedAttachments.length} รูป พร้อมส่ง!`);
+      setTimeout(() => setToastNotification(null), 3500);
+    }
   };
 
-  // Support Drag and Drop files onto chat
+  // Support Drag and Drop files onto chat - Supports Multiple
   const handleDrop = (e) => {
     e.preventDefault();
-    const file = e.dataTransfer?.files?.[0];
-    if (!file) return;
+    const rawFiles = Array.from(e.dataTransfer?.files || []);
+    if (rawFiles.length === 0) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      alert('ไฟล์มีขนาดเกิน 25MB ซึ่งเป็นขีดจำกัดของ Facebook Messenger ครับ');
-      return;
+    const validAttachments = [];
+    for (let i = 0; i < rawFiles.length; i++) {
+      const file = rawFiles[i];
+      if (file.size <= 25 * 1024 * 1024) {
+        const isImg = file.type.startsWith('image/');
+        const isVid = file.type.startsWith('video/');
+        validAttachments.push({
+          id: `att-drop-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          file,
+          name: file.name,
+          size: file.size,
+          type: isImg ? 'image' : (isVid ? 'video' : 'file'),
+          previewUrl: isImg ? URL.createObjectURL(file) : null
+        });
+      }
     }
 
-    const isImg = file.type.startsWith('image/');
-    const isVid = file.type.startsWith('video/');
-    setSelectedAttachment({
-      file,
-      name: file.name,
-      size: file.size,
-      type: isImg ? 'image' : (isVid ? 'video' : 'file'),
-      previewUrl: isImg ? URL.createObjectURL(file) : null
+    if (validAttachments.length > 0) {
+      setSelectedAttachments(prev => [...prev, ...validAttachments]);
+      setToastNotification(`📥 ลากวางไฟล์สำเร็จ ${validAttachments.length} ไฟล์!`);
+      setTimeout(() => setToastNotification(null), 3500);
+    }
+  };
+
+  // Remove single attachment by ID
+  const handleRemoveSingleAttachment = (idToRemove) => {
+    setSelectedAttachments(prev => {
+      const target = prev.find(a => a.id === idToRemove);
+      if (target?.previewUrl && target.file) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter(a => a.id !== idToRemove);
     });
-    setToastNotification(isImg ? '📷 วางรูปภาพเรียบร้อยแล้ว พร้อมส่ง!' : '📎 วางไฟล์เรียบร้อยแล้ว!');
-    setTimeout(() => setToastNotification(null), 3500);
+  };
+
+  // Remove all attachments
+  const handleClearAllAttachments = () => {
+    selectedAttachments.forEach(att => {
+      if (att.previewUrl && att.file) {
+        URL.revokeObjectURL(att.previewUrl);
+      }
+    });
+    setSelectedAttachments([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   // Portfolio & Texture Catalog Modal State
@@ -310,10 +370,8 @@ export default function UnifiedChatCenter({
   // Handle Selection of Saved Reply (ข้อความตอบกลับที่บันทึกไว้ พร้อมรูปภาพ)
   const handleSelectSavedReply = async (reply) => {
     try {
-      // 1. Set text
       setReplyText(reply.text);
 
-      // 2. If reply has attached image, fetch and attach it as File object
       if (reply.imageUrl) {
         setToastNotification(`กำลังแนบรูปภาพ "${reply.title}"...`);
         try {
@@ -321,22 +379,26 @@ export default function UnifiedChatCenter({
           const blob = await res.blob();
           const cleanName = `${reply.title.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`;
           const file = new File([blob], cleanName, { type: blob.type || 'image/jpeg' });
-          setSelectedAttachment({
+          const newAtt = {
+            id: `att-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             file,
             name: cleanName,
             size: file.size,
             type: 'image',
             previewUrl: URL.createObjectURL(file)
-          });
+          };
+          setSelectedAttachments(prev => [...prev, newAtt]);
         } catch (fetchErr) {
           console.warn('Direct fetch failed, falling back to direct URL attachment:', fetchErr);
-          setSelectedAttachment({
+          const newAtt = {
+            id: `att-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             file: null,
             name: `${reply.title}.jpg`,
             size: 150000,
             type: 'image',
             previewUrl: reply.imageUrl
-          });
+          };
+          setSelectedAttachments(prev => [...prev, newAtt]);
         }
         setToastNotification(`💬 นำการตอบกลับ "${reply.title}" พร้อมรูปภาพใส่ในช่องแชทแล้ว กดส่งได้เลย!`);
       } else {
@@ -348,36 +410,59 @@ export default function UnifiedChatCenter({
     }
   };
 
-  // Fast One-Click Send from Portfolio Catalog
+  // Fast One-Click Send from Portfolio Catalog (Single)
   const handleSelectCatalogPhoto = async (item) => {
+    await handleSelectMultipleCatalogPhotos([item]);
+  };
+
+  // Multi-Photo Send from Portfolio Catalog
+  const handleSelectMultipleCatalogPhotos = async (catalogItems) => {
+    if (!catalogItems || catalogItems.length === 0) return;
     try {
-      setToastNotification(`กำลังแนบรูปตัวอย่าง "${item.title}"...`);
-      // Convert external image to Blob File so it can be sent via Meta Send API
-      const res = await fetch(item.imageUrl);
-      const blob = await res.blob();
-      const file = new File([blob], `${item.title.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`, { type: blob.type || 'image/jpeg' });
-      setSelectedAttachment({
-        file,
-        name: `${item.title}.jpg`,
-        size: file.size,
-        type: 'image',
-        previewUrl: URL.createObjectURL(file)
-      });
-      setReplyText(`🎨 ตัวอย่างผลงาน: ${item.title}\n💰 ราคาประเมิน: ${item.priceEstimate}\n📌 รายละเอียด: ${item.description}`);
-      setToastNotification(`🎨 แนบรูปตัวอย่าง "${item.title}" เรียบร้อย กดส่งข้อความได้เลยครับ!`);
+      setToastNotification(`กำลังเตรียมรูปตัวอย่างผลงาน ${catalogItems.length} รูป...`);
+      const newAtts = [];
+
+      for (const item of catalogItems) {
+        try {
+          const res = await fetch(item.imageUrl);
+          const blob = await res.blob();
+          const cleanName = `${item.title.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`;
+          const file = new File([blob], cleanName, { type: blob.type || 'image/jpeg' });
+          newAtts.push({
+            id: `att-cat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            file,
+            name: cleanName,
+            size: file.size,
+            type: 'image',
+            previewUrl: URL.createObjectURL(file)
+          });
+        } catch (fetchErr) {
+          console.warn('Direct fetch failed, falling back to direct URL attachment:', fetchErr);
+          newAtts.push({
+            id: `att-cat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            file: null,
+            name: `${item.title}.jpg`,
+            size: 150000,
+            type: 'image',
+            previewUrl: item.imageUrl
+          });
+        }
+      }
+
+      setSelectedAttachments(prev => [...prev, ...newAtts]);
+
+      if (catalogItems.length === 1) {
+        const item = catalogItems[0];
+        setReplyText(`🎨 ตัวอย่างผลงาน: ${item.title}\n💰 ราคาประเมิน: ${item.priceEstimate}\n📌 รายละเอียด: ${item.description}`);
+      } else {
+        const titlesText = catalogItems.map((c, i) => `${i + 1}. ${c.title} (${c.priceEstimate})`).join('\n');
+        setReplyText(`🎨 ส่งตัวอย่างผลงานและเฉดสีที่ลูกค้าน่าจะสนใจครับ:\n${titlesText}\n\nสะดวกให้ทางเราเข้าวัดหน้างานจริงประเมินพื้นที่ช่วงไหนแจ้งได้เลยนะครับ 😊`);
+      }
+
+      setToastNotification(`🎨 แนบรูปตัวอย่าง ${catalogItems.length} รูปเรียบร้อย กดส่งข้อความได้เลยครับ!`);
       setTimeout(() => setToastNotification(null), 4000);
     } catch (err) {
-      console.warn('Direct fetch failed, falling back to direct URL attachment:', err);
-      setSelectedAttachment({
-        file: null,
-        name: `${item.title}.jpg`,
-        size: 150000,
-        type: 'image',
-        previewUrl: item.imageUrl
-      });
-      setReplyText(`🎨 ตัวอย่างผลงาน: ${item.title}\n💰 ราคาประเมิน: ${item.priceEstimate}\n📌 รายละเอียด: ${item.description}`);
-      setToastNotification(`🎨 แนบรูปตัวอย่าง "${item.title}" เรียบร้อย!`);
-      setTimeout(() => setToastNotification(null), 3000);
+      console.error('Error attaching catalog photos:', err);
     }
   };
 
@@ -388,12 +473,7 @@ export default function UnifiedChatCenter({
   };
 
   const handleRemoveAttachment = () => {
-    if (selectedAttachment?.previewUrl) {
-      URL.revokeObjectURL(selectedAttachment.previewUrl);
-    }
-    setSelectedAttachment(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (imageInputRef.current) imageInputRef.current.value = '';
+    handleClearAllAttachments();
   };
 
   useEffect(() => {
@@ -756,27 +836,29 @@ export default function UnifiedChatCenter({
       : activeLead.inquiry
   ) : null;
 
-  // Handle Send Message & Attachments
+  // Handle Send Message & Attachments (Supports Multiple Photos/Files)
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if ((!replyText.trim() && !selectedAttachment) || !activeLead) return;
+    if ((!replyText.trim() && selectedAttachments.length === 0) || !activeLead) return;
 
     const messageTextToSend = replyText.trim();
-    const attachmentToSend = selectedAttachment ? { ...selectedAttachment } : null;
+    const attachmentsToSend = [...selectedAttachments];
 
-    // Build optimistic message with attachments
-    const optimisticAttachments = attachmentToSend ? [{
-      id: `att-admin-${Date.now()}`,
-      type: attachmentToSend.type,
-      name: attachmentToSend.name,
-      size: attachmentToSend.size,
-      url: attachmentToSend.previewUrl || (attachmentToSend.file ? URL.createObjectURL(attachmentToSend.file) : null),
-      previewUrl: attachmentToSend.previewUrl || (attachmentToSend.file ? URL.createObjectURL(attachmentToSend.file) : null)
-    }] : [];
+    // Build optimistic attachments array for immediate UI render
+    const optimisticAttachments = attachmentsToSend.map((att, idx) => ({
+      id: `att-admin-${Date.now()}-${idx}`,
+      type: att.type,
+      name: att.name,
+      size: att.size,
+      url: att.previewUrl || (att.file ? URL.createObjectURL(att.file) : null),
+      previewUrl: att.previewUrl || (att.file ? URL.createObjectURL(att.file) : null)
+    }));
 
     let displayMsgText = messageTextToSend;
     if (!displayMsgText && optimisticAttachments.length > 0) {
-      displayMsgText = optimisticAttachments[0].type === 'image' ? '🖼️ รูปภาพ' : '📎 ไฟล์แนบ';
+      displayMsgText = optimisticAttachments.length === 1
+        ? (optimisticAttachments[0].type === 'image' ? '🖼️ รูปภาพ' : '📎 ไฟล์แนบ')
+        : `🖼️ รูปภาพแนบ (${optimisticAttachments.length} รูป)`;
     }
 
     const newMessage = {
@@ -817,9 +899,9 @@ export default function UnifiedChatCenter({
 
     setLeads(sortLeadsByLatest(updatedLeads));
     setReplyText('');
-    handleRemoveAttachment();
+    handleClearAllAttachments();
 
-    // If real live Facebook lead, attempt real API message/attachment delivery
+    // If real live Facebook lead, deliver each attachment via Facebook Graph API
     const pageToken = activeLead.activePageToken || 
       (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
        activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
@@ -830,9 +912,9 @@ export default function UnifiedChatCenter({
       setIsSendingAttachment(true);
       try {
         if (activeLead.sourceType === 'post_comment' && activeLead.commentId) {
-          if (attachmentToSend?.file) {
-            // Reply under comment with photo
-            await replyToFacebookCommentWithAttachment(pageToken, activeLead.commentId, attachmentToSend.file, messageTextToSend);
+          if (attachmentsToSend.length > 0 && attachmentsToSend[0]?.file) {
+            // Reply under comment with 1st photo
+            await replyToFacebookCommentWithAttachment(pageToken, activeLead.commentId, attachmentsToSend[0].file, messageTextToSend);
             setToastNotification(`✅ ตอบกลับพร้อมแนบรูปภาพใต้คอมเมนต์ของ "${activeLead.name}" สำเร็จ!`);
           } else {
             if (replyMode === 'comment') {
@@ -846,15 +928,19 @@ export default function UnifiedChatCenter({
             }
           }
         } else if (activeLead.customerPsid && replyMode === 'inbox') {
-          // 3. Regular Messenger Inbox reply
-          if (attachmentToSend?.file) {
-            // Send file/photo first
-            await sendFacebookAttachment(pageToken, activeLead.customerPsid, attachmentToSend.file);
+          // 3. Regular Messenger Inbox reply - Send all photos sequentially
+          const filesToSend = attachmentsToSend.filter(a => a.file);
+          if (filesToSend.length > 0) {
+            for (let i = 0; i < filesToSend.length; i++) {
+              setSendingProgress({ current: i + 1, total: filesToSend.length });
+              setToastNotification(`🚀 กำลังส่งรูปภาพ (${i + 1}/${filesToSend.length}) เข้า Facebook Messenger...`);
+              await sendFacebookAttachment(pageToken, activeLead.customerPsid, filesToSend[i].file);
+            }
             // If admin also entered text, send text message as well
             if (messageTextToSend) {
               await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
             }
-            setToastNotification(`✅ ส่งรูปภาพ/ไฟล์แนบตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
+            setToastNotification(`✅ ส่งรูปภาพ ${filesToSend.length} รูปตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
           } else {
             await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
             setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
@@ -867,6 +953,7 @@ export default function UnifiedChatCenter({
         setTimeout(() => setToastNotification(null), 6000);
       } finally {
         setIsSendingAttachment(false);
+        setSendingProgress(null);
       }
     }
 
@@ -1952,31 +2039,80 @@ export default function UnifiedChatCenter({
                         )}
 
                         {/* Render Attachments (Images, Stickers, Videos, Documents) */}
-                        {msg.attachments && msg.attachments.length > 0 && (
-                          <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '6px',
-                            margin: (msg.text && !msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ') ? '6px 0' : '2px 0'
-                          }}>
-                            {msg.attachments.map((att, attIdx) => {
-                              if (att.type === 'image') {
-                                if (att.isSticker) {
-                                  return (
-                                    <img
-                                      key={att.id || attIdx}
-                                      src={att.previewUrl || att.url}
-                                      alt="Sticker"
+                        {msg.attachments && msg.attachments.length > 0 && (() => {
+                          const normalImages = msg.attachments.filter(a => a.type === 'image' && !a.isSticker);
+                          const otherAtts = msg.attachments.filter(a => a.type !== 'image' || a.isSticker);
+
+                          return (
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              margin: (msg.text && !msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ') ? '6px 0' : '2px 0'
+                            }}>
+                              {/* Multi-image album grid layout */}
+                              {normalImages.length > 1 ? (
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: normalImages.length === 2 ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(110px, 1fr))',
+                                  gap: '5px',
+                                  maxWidth: '320px',
+                                  borderRadius: '10px',
+                                  overflow: 'hidden'
+                                }}>
+                                  {normalImages.map((att, imgIdx) => (
+                                    <div
+                                      key={att.id || imgIdx}
+                                      onClick={() => setSelectedImageModal({
+                                        url: att.url || att.previewUrl,
+                                        name: att.name || `รูปภาพที่ ${imgIdx + 1}`,
+                                        date: msg.time,
+                                        sender: isAdmin ? (msg.adminName || 'แอดมิน') : activeLead.name
+                                      })}
                                       style={{
-                                        width: '105px',
-                                        height: '105px',
-                                        objectFit: 'contain',
-                                        display: 'block'
+                                        position: 'relative',
+                                        height: normalImages.length > 2 ? '105px' : '135px',
+                                        backgroundColor: '#0f172a',
+                                        cursor: 'pointer',
+                                        overflow: 'hidden',
+                                        borderRadius: '6px',
+                                        border: isAdmin ? '1px solid rgba(255,255,255,0.2)' : '1px solid #e2e8f0'
                                       }}
-                                    />
-                                  );
-                                }
-                                return (
+                                      title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                                    >
+                                      <img
+                                        src={att.previewUrl || att.url}
+                                        alt={att.name || 'รูปภาพ'}
+                                        loading="lazy"
+                                        style={{
+                                          width: '100%',
+                                          height: '100%',
+                                          objectFit: 'cover',
+                                          display: 'block',
+                                          transition: 'transform 0.2s ease'
+                                        }}
+                                        onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                        onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1.0)'}
+                                      />
+                                      <div style={{
+                                        position: 'absolute',
+                                        top: '4px',
+                                        right: '4px',
+                                        backgroundColor: 'rgba(0,0,0,0.65)',
+                                        color: '#ffffff',
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.62rem',
+                                        fontWeight: '700',
+                                        backdropFilter: 'blur(3px)'
+                                      }}>
+                                        #{imgIdx + 1}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                normalImages.map((att, attIdx) => (
                                   <div
                                     key={att.id || attIdx}
                                     onClick={() => setSelectedImageModal({
@@ -2030,63 +2166,82 @@ export default function UnifiedChatCenter({
                                       <Maximize2 size={11} /> ขยายรูป
                                     </div>
                                   </div>
-                                );
-                              }
+                                ))
+                              )}
 
-                              if (att.type === 'video') {
+                              {/* Other attachments (Stickers, Videos, Documents) */}
+                              {otherAtts.map((att, attIdx) => {
+                                if (att.type === 'image' && att.isSticker) {
+                                  return (
+                                    <img
+                                      key={att.id || attIdx}
+                                      src={att.previewUrl || att.url}
+                                      alt="Sticker"
+                                      style={{
+                                        width: '105px',
+                                        height: '105px',
+                                        objectFit: 'contain',
+                                        display: 'block'
+                                      }}
+                                    />
+                                  );
+                                }
+
+                                if (att.type === 'video') {
+                                  return (
+                                    <video
+                                      key={att.id || attIdx}
+                                      src={att.url}
+                                      controls
+                                      style={{
+                                        maxWidth: '280px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(0,0,0,0.1)'
+                                      }}
+                                    />
+                                  );
+                                }
+
+                                // Document or generic file
                                 return (
-                                  <video
+                                  <a
                                     key={att.id || attIdx}
-                                    src={att.url}
-                                    controls
+                                    href={att.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={att.name || 'document'}
                                     style={{
-                                      maxWidth: '280px',
-                                      borderRadius: '10px',
-                                      border: '1px solid rgba(0,0,0,0.1)'
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      padding: '8px 12px',
+                                      backgroundColor: isAdmin ? 'rgba(255,255,255,0.18)' : '#f8fafc',
+                                      color: isAdmin ? '#ffffff' : '#0f172a',
+                                      borderRadius: '8px',
+                                      textDecoration: 'none',
+                                      fontSize: '0.8rem',
+                                      fontWeight: '600',
+                                      border: isAdmin ? '1px solid rgba(255,255,255,0.3)' : '1px solid #cbd5e1'
                                     }}
-                                  />
-                                );
-                              }
-
-                              // Document or generic file
-                              return (
-                                <a
-                                  key={att.id || attIdx}
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  download={att.name || 'document'}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    padding: '8px 12px',
-                                    backgroundColor: isAdmin ? 'rgba(255,255,255,0.18)' : '#f8fafc',
-                                    color: isAdmin ? '#ffffff' : '#0f172a',
-                                    borderRadius: '8px',
-                                    textDecoration: 'none',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '600',
-                                    border: isAdmin ? '1px solid rgba(255,255,255,0.3)' : '1px solid #cbd5e1'
-                                  }}
-                                >
-                                  <FileText size={18} />
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                      {att.name || 'ดาวน์โหลดเอกสาร'}
-                                    </div>
-                                    {att.size && (
-                                      <div style={{ fontSize: '0.68rem', opacity: 0.8 }}>
-                                        {(att.size / 1024).toFixed(0)} KB
+                                  >
+                                    <FileText size={18} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                        {att.name || 'ดาวน์โหลดเอกสาร'}
                                       </div>
-                                    )}
-                                  </div>
-                                  <Download size={14} />
-                                </a>
-                              );
-                            })}
-                          </div>
-                        )}
+                                      {att.size && (
+                                        <div style={{ fontSize: '0.68rem', opacity: 0.8 }}>
+                                          {(att.size / 1024).toFixed(0)} KB
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Download size={14} />
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
 
                         {/* Show text message if not just a placeholder */}
                         {msg.text && (
@@ -2239,134 +2394,210 @@ export default function UnifiedChatCenter({
                 flexShrink: 0,
                 boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
               }}>
-                {/* File Attachment Preview Banner */}
-                {selectedAttachment && (
+                {/* Multi-Attachment Preview Queue Tray */}
+                {selectedAttachments.length > 0 && (
                   <div style={{
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    backgroundColor: selectedAttachment.type === 'image' ? '#eff6ff' : '#f8fafc',
-                    border: selectedAttachment.type === 'image' ? '1.5px dashed #2563eb' : '1.5px dashed #64748b',
-                    borderRadius: '10px',
-                    marginBottom: '4px'
+                    flexDirection: 'column',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    backgroundColor: '#f8fafc',
+                    border: '1.5px dashed #3b82f6',
+                    borderRadius: '12px',
+                    marginBottom: '4px',
+                    animation: 'fadeIn 0.2s ease-out'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                      {selectedAttachment.previewUrl ? (
-                        <div style={{ position: 'relative' }}>
-                          <img
-                            src={selectedAttachment.previewUrl}
-                            alt="Attachment Preview"
-                            style={{
-                              width: '48px',
-                              height: '48px',
-                              objectFit: 'cover',
-                              borderRadius: '8px',
-                              border: '1.5px solid #93c5fd',
-                              boxShadow: '0 2px 5px rgba(37, 99, 235, 0.2)'
-                            }}
-                          />
-                          <span style={{
-                            position: 'absolute',
-                            bottom: '-4px',
-                            right: '-4px',
-                            backgroundColor: '#2563eb',
-                            color: '#ffffff',
-                            borderRadius: '50%',
-                            width: '18px',
-                            height: '18px',
+                    {/* Header info bar */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      color: '#1e3a8a'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>📷 เลือกไว้ {selectedAttachments.length} รายการ</span>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>
+                          ({(selectedAttachments.reduce((acc, curr) => acc + (curr.size || 0), 0) / 1024).toFixed(0)} KB)
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => imageInputRef.current?.click()}
+                          style={{
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.65rem'
-                          }}>
-                            📷
-                          </span>
-                        </div>
-                      ) : (
-                        <div style={{
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: '8px',
-                          backgroundColor: '#dbeafe',
-                          color: '#1d4ed8',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <FileText size={24} />
-                        </div>
-                      )}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{
-                          fontSize: '0.82rem',
-                          fontWeight: '700',
-                          color: selectedAttachment.type === 'image' ? '#1e3a8a' : '#1e293b',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          maxWidth: isMobile ? '160px' : '360px'
-                        }}>
-                          {selectedAttachment.type === 'image' ? `📷 ${selectedAttachment.name}` : selectedAttachment.name}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                          {(selectedAttachment.size / 1024).toFixed(1)} KB • {selectedAttachment.type === 'image' ? 'รูปภาพพร้อมส่งตรงเข้า Facebook Messenger' : 'ไฟล์เอกสารพร้อมส่ง'}
-                        </div>
+                            gap: '4px',
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#1d4ed8',
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontSize: '0.72rem',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                          }}
+                          title="เลือกรูปภาพเพิ่มอีก"
+                        >
+                          <Plus size={13} /> เพิ่มรูปอีก
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearAllAttachments}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            background: '#fee2e2',
+                            border: 'none',
+                            color: '#dc2626',
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontSize: '0.72rem',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                          title="ล้างรูปทั้งหมด"
+                        >
+                          <X size={12} /> ล้างทั้งหมด
+                        </button>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleRemoveAttachment}
-                      style={{
-                        backgroundColor: '#fee2e2',
-                        border: 'none',
-                        color: '#ef4444',
-                        borderRadius: '50%',
-                        width: '28px',
-                        height: '28px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        flexShrink: 0
-                      }}
-                      title="ยกเลิกไฟล์แนบ"
-                    >
-                      <X size={16} />
-                    </button>
+                    {/* Scrollable Horizontal Preview Row */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      overflowX: 'auto',
+                      paddingBottom: '4px',
+                      paddingTop: '2px',
+                      overscrollBehavior: 'contain'
+                    }}>
+                      {selectedAttachments.map((att, idx) => (
+                        <div
+                          key={att.id || idx}
+                          style={{
+                            position: 'relative',
+                            flexShrink: 0,
+                            width: '76px',
+                            height: '76px',
+                            borderRadius: '10px',
+                            border: '1.5px solid #cbd5e1',
+                            overflow: 'hidden',
+                            backgroundColor: '#ffffff',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                          }}
+                        >
+                          {att.previewUrl ? (
+                            <img
+                              src={att.previewUrl}
+                              alt={att.name || 'preview'}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#eff6ff',
+                              color: '#2563eb',
+                              padding: '4px'
+                            }}>
+                              <FileText size={20} />
+                              <span style={{ fontSize: '0.6rem', marginTop: '2px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '90%' }}>
+                                {att.name}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Index Badge */}
+                          <span style={{
+                            position: 'absolute',
+                            bottom: '3px',
+                            left: '3px',
+                            backgroundColor: 'rgba(0,0,0,0.65)',
+                            color: '#ffffff',
+                            borderRadius: '4px',
+                            padding: '1px 4px',
+                            fontSize: '0.62rem',
+                            fontWeight: '800',
+                            lineHeight: '1.1'
+                          }}>
+                            #{idx + 1}
+                          </span>
+
+                          {/* Remove Single Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSingleAttachment(att.id)}
+                            style={{
+                              position: 'absolute',
+                              top: '3px',
+                              right: '3px',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                              color: '#ffffff',
+                              border: '1px solid #ffffff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                              padding: 0
+                            }}
+                            title="ลบรูปนี้ออก"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {/* Hidden Photo Input (accept="image/*") */}
+                  {/* Hidden Photo Input (accept="image/*" multiple) */}
                   <input
                     type="file"
                     ref={imageInputRef}
                     onChange={handleImageSelect}
                     accept="image/*"
+                    multiple
                     style={{ display: 'none' }}
                   />
 
-                  {/* Hidden Document Input */}
+                  {/* Hidden Document Input (multiple) */}
                   <input
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,application/pdf"
+                    multiple
                     style={{ display: 'none' }}
                   />
 
-                  {/* 1. DEDICATED PHOTO ATTACHMENT BUTTON (Compact Icon) */}
+                  {/* 1. DEDICATED PHOTO ATTACHMENT BUTTON (Compact Icon with Badge) */}
                   <button
                     type="button"
                     onClick={() => imageInputRef.current?.click()}
                     style={{
+                      position: 'relative',
                       width: '42px',
                       height: '42px',
                       borderRadius: '12px',
-                      border: selectedAttachment?.type === 'image' ? '2px solid #2563eb' : '1px solid #bfdbfe',
-                      backgroundColor: selectedAttachment?.type === 'image' ? '#dbeafe' : '#eff6ff',
+                      border: selectedAttachments.some(a => a.type === 'image') ? '2px solid #2563eb' : '1px solid #bfdbfe',
+                      backgroundColor: selectedAttachments.some(a => a.type === 'image') ? '#dbeafe' : '#eff6ff',
                       color: '#1d4ed8',
                       display: 'flex',
                       alignItems: 'center',
@@ -2375,22 +2606,43 @@ export default function UnifiedChatCenter({
                       flexShrink: 0,
                       transition: 'all 0.15s ease'
                     }}
-                    title="แนบรูปภาพส่งให้ลูกค้า"
+                    title="แนบรูปภาพส่งให้ลูกค้า (เลือกได้ทีละหลายรูป)"
                   >
                     <Camera size={19} />
+                    {selectedAttachments.filter(a => a.type === 'image').length > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-4px',
+                        right: '-4px',
+                        backgroundColor: '#2563eb',
+                        color: '#ffffff',
+                        fontSize: '0.65rem',
+                        fontWeight: '800',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                      }}>
+                        {selectedAttachments.filter(a => a.type === 'image').length}
+                      </span>
+                    )}
                   </button>
 
-                  {/* 2. DOCUMENT ATTACHMENT BUTTON (Compact Icon) */}
+                  {/* 2. DOCUMENT ATTACHMENT BUTTON (Compact Icon with Badge) */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     style={{
+                      position: 'relative',
                       width: '42px',
                       height: '42px',
                       borderRadius: '12px',
-                      border: (selectedAttachment && selectedAttachment.type !== 'image') ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                      backgroundColor: (selectedAttachment && selectedAttachment.type !== 'image') ? '#eff6ff' : '#f8fafc',
-                      color: (selectedAttachment && selectedAttachment.type !== 'image') ? '#2563eb' : '#64748b',
+                      border: selectedAttachments.some(a => a.type !== 'image') ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                      backgroundColor: selectedAttachments.some(a => a.type !== 'image') ? '#eff6ff' : '#f8fafc',
+                      color: selectedAttachments.some(a => a.type !== 'image') ? '#2563eb' : '#64748b',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2401,6 +2653,26 @@ export default function UnifiedChatCenter({
                     title="แนบเอกสาร PDF หรือไฟล์อื่นๆ"
                   >
                     <Paperclip size={18} />
+                    {selectedAttachments.filter(a => a.type !== 'image').length > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-4px',
+                        right: '-4px',
+                        backgroundColor: '#2563eb',
+                        color: '#ffffff',
+                        fontSize: '0.65rem',
+                        fontWeight: '800',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                      }}>
+                        {selectedAttachments.filter(a => a.type !== 'image').length}
+                      </span>
+                    )}
                   </button>
 
                   {/* 3. CATALOG BUTTON IN COMPOSER (Compact Icon) */}
@@ -2464,10 +2736,10 @@ export default function UnifiedChatCenter({
                       }
                     }}
                     placeholder={
-                      selectedAttachment 
-                        ? (selectedAttachment.type === 'image' 
-                            ? `พิมพ์ข้อความแนบไปกับรูปภาพนี้ (หรือไม่พิมพ์ก็ได้)... (Enter เพื่อส่ง)` 
-                            : `พิมพ์ข้อความอธิบายไฟล์... (Enter เพื่อส่ง)`)
+                      selectedAttachments.length > 0 
+                        ? (selectedAttachments.every(a => a.type === 'image') 
+                            ? `พิมพ์ข้อความแนบไปกับ ${selectedAttachments.length} รูปนี้ (หรือไม่พิมพ์ก็ได้)... (Enter เพื่อส่ง)` 
+                            : `พิมพ์ข้อความอธิบาย ${selectedAttachments.length} ไฟล์นี้... (Enter เพื่อส่ง)`)
                         : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Enter เพื่อส่ง)`
                     }
                     style={{
@@ -2497,32 +2769,34 @@ export default function UnifiedChatCenter({
                   {/* Friendly Send Button */}
                   <button
                     type="submit"
-                    disabled={(!replyText.trim() && !selectedAttachment) || isSendingAttachment}
+                    disabled={(!replyText.trim() && selectedAttachments.length === 0) || isSendingAttachment}
                     style={{
-                      padding: '0 20px',
+                      padding: '0 18px',
                       borderRadius: '12px',
-                      backgroundColor: (replyText.trim() || selectedAttachment) ? '#1877f2' : '#e2e8f0',
-                      color: (replyText.trim() || selectedAttachment) ? '#ffffff' : '#94a3b8',
+                      backgroundColor: (replyText.trim() || selectedAttachments.length > 0) ? '#1877f2' : '#e2e8f0',
+                      color: (replyText.trim() || selectedAttachments.length > 0) ? '#ffffff' : '#94a3b8',
                       fontWeight: '700',
                       fontSize: '0.86rem',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      cursor: ((replyText.trim() || selectedAttachment) && !isSendingAttachment) ? 'pointer' : 'not-allowed',
+                      cursor: ((replyText.trim() || selectedAttachments.length > 0) && !isSendingAttachment) ? 'pointer' : 'not-allowed',
                       height: '44px',
-                      boxShadow: (replyText.trim() || selectedAttachment) ? '0 2px 8px rgba(24, 119, 242, 0.3)' : 'none',
+                      boxShadow: (replyText.trim() || selectedAttachments.length > 0) ? '0 2px 8px rgba(24, 119, 242, 0.3)' : 'none',
                       transition: 'all 0.15s ease',
                       flexShrink: 0
                     }}
                   >
                     {isSendingAttachment ? (
                       <>
-                        <RefreshCw size={15} className="spin-anim" /> ส่ง...
+                        <RefreshCw size={15} className="spin-anim" /> 
+                        {sendingProgress ? `ส่ง ${sendingProgress.current}/${sendingProgress.total}...` : 'ส่ง...'}
                       </>
                     ) : (
                       <>
-                        <Send size={15} /> ส่ง
+                        <Send size={15} /> 
+                        {selectedAttachments.length > 1 ? `ส่ง (${selectedAttachments.length})` : 'ส่ง'}
                       </>
                     )}
                   </button>
@@ -2898,6 +3172,7 @@ export default function UnifiedChatCenter({
         isOpen={isPortfolioCatalogOpen}
         onClose={() => setIsPortfolioCatalogOpen(false)}
         onSelectPhotoToSend={handleSelectCatalogPhoto}
+        onSelectMultiplePhotosToSend={handleSelectMultipleCatalogPhotos}
         onInsertDescription={handleInsertCatalogDescription}
         activeLead={activeLead}
       />

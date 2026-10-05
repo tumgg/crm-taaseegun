@@ -22,6 +22,7 @@ export default function PortfolioCatalogModal({
   isOpen, 
   onClose, 
   onSelectPhotoToSend, 
+  onSelectMultiplePhotosToSend,
   onInsertDescription,
   activeLead
 }) {
@@ -30,6 +31,7 @@ export default function PortfolioCatalogModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   // New item form state
   const [newTitle, setNewTitle] = useState('');
@@ -91,6 +93,31 @@ export default function PortfolioCatalogModal({
     if (onSelectPhotoToSend) {
       onSelectPhotoToSend(item);
     }
+    onClose();
+  };
+
+  const toggleSelectItem = (item) => {
+    setSelectedIds(prev => 
+      prev.includes(item.id) 
+        ? prev.filter(id => id !== item.id)
+        : [...prev, item.id]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  const handleSendSelectedBatch = () => {
+    const selectedItems = items.filter(it => selectedIds.includes(it.id));
+    if (selectedItems.length === 0) return;
+
+    if (onSelectMultiplePhotosToSend) {
+      onSelectMultiplePhotosToSend(selectedItems);
+    } else if (onSelectPhotoToSend) {
+      onSelectPhotoToSend(selectedItems[0]);
+    }
+    setSelectedIds([]);
     onClose();
   };
 
@@ -351,30 +378,37 @@ export default function PortfolioCatalogModal({
             </div>
           ) : (
             filteredItems.map(item => {
+              const isSelected = selectedIds.includes(item.id);
+              const selectedIndex = selectedIds.indexOf(item.id);
               return (
                 <div
                   key={item.id}
                   style={{
                     borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
+                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                    backgroundColor: isSelected ? '#f8faff' : '#ffffff',
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.04)',
-                    transition: 'all 0.2s ease'
+                    boxShadow: isSelected ? '0 4px 14px rgba(37, 99, 235, 0.18)' : '0 2px 5px rgba(0,0,0,0.04)',
+                    transition: 'all 0.2s ease',
+                    position: 'relative'
                   }}
                   onMouseOver={(e) => {
                     e.currentTarget.style.transform = 'translateY(-3px)';
-                    e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.08)';
+                    e.currentTarget.style.boxShadow = isSelected ? '0 8px 20px rgba(37, 99, 235, 0.25)' : '0 8px 16px rgba(0,0,0,0.08)';
                   }}
                   onMouseOut={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.04)';
+                    e.currentTarget.style.boxShadow = isSelected ? '0 4px 14px rgba(37, 99, 235, 0.18)' : '0 2px 5px rgba(0,0,0,0.04)';
                   }}
                 >
                   {/* Photo Preview */}
-                  <div style={{ position: 'relative', height: '140px', backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
+                  <div 
+                    onClick={() => toggleSelectItem(item)}
+                    style={{ position: 'relative', height: '140px', backgroundColor: '#f1f5f9', overflow: 'hidden', cursor: 'pointer' }}
+                    title={isSelected ? 'คลิกเพื่อยกเลิกการเลือก' : 'คลิกเพื่อเลือกรูปภาพนี้'}
+                  >
                     <img
                       src={item.imageUrl}
                       alt={item.title}
@@ -400,6 +434,35 @@ export default function PortfolioCatalogModal({
                     }}>
                       {item.pageName}
                     </span>
+
+                    {/* Circular Selection Checkbox */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '8px',
+                        right: '8px',
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        backgroundColor: isSelected ? '#2563eb' : 'rgba(0, 0, 0, 0.45)',
+                        border: isSelected ? '2px solid #ffffff' : '1.5px solid rgba(255, 255, 255, 0.8)',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.25)',
+                        backdropFilter: 'blur(4px)',
+                        fontSize: '0.7rem',
+                        fontWeight: '800',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {isSelected ? (
+                        <span>#{selectedIndex + 1}</span>
+                      ) : (
+                        <Plus size={14} />
+                      )}
+                    </div>
 
                     {item.priceEstimate && (
                       <span style={{
@@ -443,7 +506,7 @@ export default function PortfolioCatalogModal({
                     <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
                       <button
                         type="button"
-                        onClick={() => handleDirectSend(item)}
+                        onClick={() => toggleSelectItem(item)}
                         style={{
                           flex: 1,
                           display: 'flex',
@@ -452,20 +515,48 @@ export default function PortfolioCatalogModal({
                           gap: '5px',
                           padding: '8px',
                           borderRadius: '8px',
-                          backgroundColor: '#2563eb',
-                          color: '#ffffff',
-                          border: 'none',
+                          backgroundColor: isSelected ? '#dbeafe' : '#eff6ff',
+                          color: '#1d4ed8',
+                          border: isSelected ? '1.5px solid #2563eb' : '1px solid #bfdbfe',
                           fontWeight: '700',
                           fontSize: '0.78rem',
                           cursor: 'pointer',
-                          boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
-                          transition: 'background-color 0.15s'
+                          transition: 'all 0.15s ease'
                         }}
-                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
-                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                        title="ส่งรูปภาพนี้เข้าแชทลูกค้าทันที"
+                        title={isSelected ? 'คลิกเพื่อยกเลิกการเลือกรูปนี้' : 'เลือกรูปนี้ (สามารถเลือกหลายรูปพร้อมกันได้)'}
                       >
-                        <Send size={13} /> ส่งรูปนี้ให้ลูกค้า
+                        {isSelected ? (
+                          <>
+                            <Check size={14} /> เลือกแล้ว (#{selectedIndex + 1})
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={14} /> เลือกรูปนี้
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDirectSend(item)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          backgroundColor: '#2563eb',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: '0.74rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 4px rgba(37, 99, 235, 0.25)'
+                        }}
+                        title="ส่งเฉพาะรูปภาพนี้เข้าแชทลูกค้าทันที"
+                      >
+                        <Send size={13} />
                       </button>
 
                       <button
@@ -496,6 +587,83 @@ export default function PortfolioCatalogModal({
           )}
         </div>
 
+        {/* Sticky Multi-Select Batch Action Bar */}
+        {selectedIds.length > 0 && (
+          <div style={{
+            position: 'sticky',
+            bottom: 0,
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 -4px 20px rgba(0,0,0,0.25)',
+            zIndex: 20,
+            borderTop: '1px solid #334155',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                borderRadius: '50%',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '800',
+                fontSize: '0.76rem'
+              }}>
+                {selectedIds.length}
+              </div>
+              <span style={{ fontSize: '0.88rem', fontWeight: '700' }}>
+                เลือกไว้ {selectedIds.length} รูปภาพ
+              </span>
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid #64748b',
+                  color: '#94a3b8',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  cursor: 'pointer'
+                }}
+              >
+                ล้างที่เลือก
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSendSelectedBatch}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 20px',
+                borderRadius: '10px',
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: '800',
+                fontSize: '0.86rem',
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(37, 99, 235, 0.4)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+            >
+              <Send size={15} /> แนบ {selectedIds.length} รูปที่เลือกลงในแชท 🚀
+            </button>
+          </div>
+        )}
+
         {/* Footer Note */}
         <div style={{
           padding: '10px 20px',
@@ -507,7 +675,7 @@ export default function PortfolioCatalogModal({
           fontSize: '0.74rem',
           color: '#64748b'
         }}>
-          <span>💡 คลิก <strong>"ส่งรูปนี้ให้ลูกค้า"</strong> เพื่อส่งเข้าแชท Messenger ได้ใน 1 วินาที</span>
+          <span>💡 สามารถกดเลือกหลายรูปพร้อมกันแล้วคลิกส่งทีเดียว หรือกดไอคอน ✈️ เพื่อส่งเฉพาะรูปนั้นทันทีได้</span>
           <span>มีทั้งหมด {items.length} ผลงานในคลัง</span>
         </div>
       </div>
