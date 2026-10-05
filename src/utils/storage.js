@@ -1,5 +1,9 @@
-// LocalStorage Persistence & Cloud Database sync helper
-import { REAL_GOOD_VIBES_PAGE_ID, REAL_GOOD_VIBES_TOKEN } from '../data/mockData';
+import { 
+  REAL_GOOD_VIBES_PAGE_ID, 
+  REAL_GOOD_VIBES_TOKEN,
+  REAL_TAASEEGUN_PAGE_ID,
+  REAL_TAASEEGUN_TOKEN
+} from '../data/mockData';
 
 const LEADS_STORAGE_KEY = 'omnisocial_leads_v2';
 const PAGES_STORAGE_KEY = 'omnisocial_pages_v2';
@@ -43,19 +47,29 @@ export function loadStoredPages(fallbackPages) {
     if (data) {
       let parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Keep ONLY real active pages (Good Vibes Texture or custom user pages with valid token)
+        // Keep ONLY real active pages (Good Vibes, Taaseegun, or custom pages with valid tokens)
         let activeOnly = parsed.filter(p => 
           p.id === REAL_GOOD_VIBES_PAGE_ID || 
+          p.id === REAL_TAASEEGUN_PAGE_ID ||
           (p.activePageToken && p.activePageToken.length > 50 && !p.activePageToken.includes('...'))
         );
 
         // Ensure Good Vibes page is present with the verified real token
         let goodVibes = activeOnly.find(p => p.id === REAL_GOOD_VIBES_PAGE_ID);
         if (!goodVibes) {
-          goodVibes = fallbackPages[0];
+          goodVibes = fallbackPages.find(p => p.id === REAL_GOOD_VIBES_PAGE_ID) || fallbackPages[0];
           activeOnly.unshift(goodVibes);
         } else {
           goodVibes.activePageToken = REAL_GOOD_VIBES_TOKEN;
+        }
+
+        // Ensure Taaseegun page is present with the verified real token
+        let taaseegun = activeOnly.find(p => p.id === REAL_TAASEEGUN_PAGE_ID);
+        if (!taaseegun) {
+          taaseegun = fallbackPages.find(p => p.id === REAL_TAASEEGUN_PAGE_ID) || fallbackPages[1];
+          if (taaseegun) activeOnly.push(taaseegun);
+        } else {
+          taaseegun.activePageToken = REAL_TAASEEGUN_TOKEN;
         }
 
         localStorage.setItem(PAGES_STORAGE_KEY, JSON.stringify(activeOnly));

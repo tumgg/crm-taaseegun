@@ -3,6 +3,9 @@
 export const REAL_GOOD_VIBES_PAGE_ID = '113532784994486';
 export const REAL_GOOD_VIBES_TOKEN = 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXmFNrU2RIZASiV4YvZC1W3dmZAcfAxnZCC4ZA7ptk6r0WpKMBlnDRKBli8yzdZCLDBl77QQU58Wie0yZAYBNcWPNaLmZCl41bfe87zfeTj2qacppOOdnxyZAZAbpnpApaoBZCQtousIhkRpUuPGryfZAevGVXW6Ip2x0jijS4sKyb';
 
+export const REAL_TAASEEGUN_PAGE_ID = '110842514841725';
+export const REAL_TAASEEGUN_TOKEN = 'EAAZCpCdzNLVIBSq1P5PtexPOiXZAT7XQVZCuRqdSFWQZA8oLdDuT6SHStVgVUbTx7jljKvVLHnNDsDMw0817PC8ZC6ZCumGm2ZB4cRP0Jy7eNzs7cCfp6zIv30aSZBZA1tnZBPQ0F9w6711LJuiO35ZBWEJb05KkcbjZCTZCCEGUSjKDBpa3T5zwyxZBdr9Fq5NnMFl3kSXlGTj6p3';
+
 export const initialFacebookPages = [
   {
     id: REAL_GOOD_VIBES_PAGE_ID,
@@ -42,6 +45,45 @@ export const initialFacebookPages = [
       linkClicks: '19.2K',
       totalShares: '8.4K',
       inboxLeadsCount: 42
+    }
+  },
+  {
+    id: REAL_TAASEEGUN_PAGE_ID,
+    name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี',
+    handle: '@taaseegun',
+    category: 'ผู้รับเหมาทาสี / รีโนเวทบ้านและอาคาร',
+    avatar: 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=80',
+    followers: 48900,
+    reach: 185000,
+    engagementRate: '6.4%',
+    growthRate: '+22.1%',
+    activePageToken: REAL_TAASEEGUN_TOKEN,
+    demographics: {
+      gender: { women: 42, men: 55, other: 3 },
+      ageRange: [
+        { age: '18-24', pct: 10 },
+        { age: '25-34', pct: 45 },
+        { age: '35-44', pct: 32 },
+        { age: '45-54', pct: 10 },
+        { age: '55+', pct: 3 }
+      ],
+      topCities: [
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 65 },
+        { city: 'นนทบุรี (Nonthaburi)', pct: 16 },
+        { city: 'ปทุมธานี (Pathum Thani)', pct: 10 },
+        { city: 'สมุทรปราการ (Samut Prakan)', pct: 9 }
+      ],
+      bestTimes: [
+        'วันจันทร์ 18:00 - 21:00 น.',
+        'วันพฤหัสบดี 19:00 - 22:00 น.',
+        'วันอาทิตย์ 09:00 - 13:00 น.'
+      ]
+    },
+    metrics: {
+      profileViews: '64.2K',
+      linkClicks: '31.5K',
+      totalShares: '14.8K',
+      inboxLeadsCount: 86
     }
   }
 ];

@@ -35,7 +35,9 @@ import {
   quickReplyTemplates, 
   interactionTypeOptions,
   REAL_GOOD_VIBES_PAGE_ID,
-  REAL_GOOD_VIBES_TOKEN 
+  REAL_GOOD_VIBES_TOKEN,
+  REAL_TAASEEGUN_PAGE_ID,
+  REAL_TAASEEGUN_TOKEN 
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
@@ -61,44 +63,61 @@ export default function UnifiedChatCenter({
   const [toastNotification, setToastNotification] = useState(null);
   const [isSyncingFb, setIsSyncingFb] = useState(false);
 
-  // Sync real live conversations from Meta Graph API
+  // Sync real live conversations from Meta Graph API for all connected pages
   const handleSyncRealFacebook = async () => {
     const isValidToken = (t) => typeof t === 'string' && t.startsWith('EAA') && !t.includes('...') && t.length > 50;
 
-    // 1. Look for a page that has a verified, real active token
-    let connectedPage = facebookPages.find(p => isValidToken(p.activePageToken));
+    // Collect all pages with verified tokens
+    let pagesToSync = (facebookPages || []).filter(p => isValidToken(p.activePageToken));
 
-    // 2. Fallback to Good Vibes Texture page with verified token
-    if (!connectedPage) {
-      const goodVibes = facebookPages.find(p => p.id === REAL_GOOD_VIBES_PAGE_ID);
-      if (goodVibes) {
-        connectedPage = {
-          ...goodVibes,
-          activePageToken: REAL_GOOD_VIBES_TOKEN
-        };
-      } else {
-        connectedPage = {
-          id: REAL_GOOD_VIBES_PAGE_ID,
-          name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes',
-          activePageToken: REAL_GOOD_VIBES_TOKEN
-        };
-      }
+    // Ensure Good Vibes is included
+    if (!pagesToSync.some(p => p.id === REAL_GOOD_VIBES_PAGE_ID)) {
+      pagesToSync.push({
+        id: REAL_GOOD_VIBES_PAGE_ID,
+        name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes',
+        activePageToken: REAL_GOOD_VIBES_TOKEN
+      });
     }
 
-    if (!connectedPage || !isValidToken(connectedPage.activePageToken)) {
-      alert('ยังไม่พบเพจที่ใส่ Access Token ที่ถูกต้อง กรุณาไปที่แท็บ "วิธีเชื่อมต่อ API ส่งข้อความ & หลายเพจ" เพื่อใส่ Token ก่อนครับ');
-      return;
+    // Ensure Taaseegun is included
+    if (!pagesToSync.some(p => p.id === REAL_TAASEEGUN_PAGE_ID)) {
+      pagesToSync.push({
+        id: REAL_TAASEEGUN_PAGE_ID,
+        name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี',
+        activePageToken: REAL_TAASEEGUN_TOKEN
+      });
     }
 
     setIsSyncingFb(true);
     try {
-      const realLeads = await fetchLiveFacebookConversations(connectedPage.id, connectedPage.activePageToken, connectedPage.name);
-      if (realLeads.length === 0) {
-        alert(`เชื่อมต่อกับเพจ "${connectedPage.name}" สำเร็จ แต่ยังไม่มีข้อความใหม่ใน Inbox ครับ`);
+      const syncPromises = pagesToSync.map(async (page) => {
+        try {
+          const pageLeads = await fetchLiveFacebookConversations(page.id, page.activePageToken, page.name);
+          return { pageName: page.name, leads: pageLeads, error: null };
+        } catch (err) {
+          console.warn(`Sync error for ${page.name}:`, err);
+          return { pageName: page.name, leads: [], error: err.message };
+        }
+      });
+
+      const results = await Promise.all(syncPromises);
+      let allNewLeads = [];
+      let pageSummaries = [];
+
+      for (const res of results) {
+        if (res.leads.length > 0) {
+          allNewLeads.push(...res.leads);
+          const shortName = res.pageName.includes('Good Vibes') ? 'Good Vibes' : res.pageName.includes('ทาสีกัน') ? 'ทาสีกัน' : res.pageName;
+          pageSummaries.push(`${shortName}: ${res.leads.length} แชท`);
+        }
+      }
+
+      if (allNewLeads.length === 0) {
+        alert('เชื่อมต่อสำเร็จ แต่ยังไม่มีบทสนทนาใหม่ใน Inbox ของเพจที่เชื่อมต่อครับ');
       } else {
         setLeads(prev => {
           const existingIds = new Set(prev.map(l => l.id));
-          const newUnique = realLeads.filter(l => !existingIds.has(l.id));
+          const newUnique = allNewLeads.filter(l => !existingIds.has(l.id));
           return [...newUnique, ...prev];
         });
 
@@ -106,8 +125,8 @@ export default function UnifiedChatCenter({
           playNotificationSound();
         }
 
-        setSelectedLeadId(realLeads[0].id);
-        setToastNotification(`🎉 ซิงค์แชทจริงสำเร็จ! ดึง ${realLeads.length} บทสนทนาจริงจากเพจ "${connectedPage.name}" เข้ามาในระบบแล้ว!`);
+        setSelectedLeadId(allNewLeads[0].id);
+        setToastNotification(`🎉 ซิงค์แชทสดสำเร็จ! รวม ${allNewLeads.length} แชทจริงจาก Facebook (${pageSummaries.join(', ')})`);
         setTimeout(() => setToastNotification(null), 6000);
       }
     } catch (err) {
@@ -448,10 +467,10 @@ export default function UnifiedChatCenter({
               cursor: isSyncingFb ? 'not-allowed' : 'pointer',
               opacity: isSyncingFb ? 0.75 : 1
             }}
-            title="ดึงข้อความจริงล่าสุดจาก Inbox เพจ Good Vibes Texture ที่เชื่อมต่อ Meta API ไว้"
+            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้ (Good Vibes & ทาสีกัน)"
           >
             <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
-            {isSyncingFb ? 'กำลังดึงแชทจริง...' : '⚡ ดึงแชทสดจากเพจ Facebook (Good Vibes)'}
+            {isSyncingFb ? 'กำลังดึงแชทสดทุกเพจ...' : '⚡ ดึงแชทสดจากทุกเพจ Facebook (Good Vibes & ทาสีกัน)'}
           </button>
         </div>
       </div>
@@ -483,7 +502,7 @@ export default function UnifiedChatCenter({
         }}>
           {/* Header & Filters */}
           <div style={{ padding: '14px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <h3 style={{ fontSize: '0.98rem', fontWeight: '800', color: '#0f172a' }}>
                 รวมแชทและคอมเมนต์
               </h3>
@@ -497,6 +516,66 @@ export default function UnifiedChatCenter({
               }}>
                 {filteredConversations.length} รายการ
               </span>
+            </div>
+
+            {/* Page Filter Tabs */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+              <button
+                onClick={() => setFilterChannel('all')}
+                style={{
+                  flex: 1,
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: filterChannel === 'all' ? '700' : '500',
+                  backgroundColor: filterChannel === 'all' ? '#0f172a' : '#f1f5f9',
+                  color: filterChannel === 'all' ? '#ffffff' : '#64748b',
+                  border: 'none',
+                  textAlign: 'center'
+                }}
+              >
+                ทุกเพจ
+              </button>
+              <button
+                onClick={() => setFilterChannel(REAL_GOOD_VIBES_PAGE_ID)}
+                style={{
+                  flex: 1,
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '700' : '500',
+                  backgroundColor: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '#1877f2' : '#f1f5f9',
+                  color: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '#ffffff' : '#64748b',
+                  border: 'none',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+                title="Good Vibes Texture"
+              >
+                🎨 Good Vibes
+              </button>
+              <button
+                onClick={() => setFilterChannel(REAL_TAASEEGUN_PAGE_ID)}
+                style={{
+                  flex: 1,
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '700' : '500',
+                  backgroundColor: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '#d97706' : '#f1f5f9',
+                  color: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '#ffffff' : '#64748b',
+                  border: 'none',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+                title="บริษัท ทาสีกัน จำกัด"
+              >
+                🏠 ทาสีกัน
+              </button>
             </div>
 
             {/* Search Input */}
@@ -636,14 +715,32 @@ export default function UnifiedChatCenter({
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                      <span style={{
-                        fontSize: '0.68rem',
-                        fontWeight: '700',
-                        color: lead.platform === 'facebook' ? '#1877f2' : lead.platform === 'youtube' ? '#dc2626' : '#0f172a'
-                      }}>
-                        {lead.platform === 'facebook' ? '📘 FB' : lead.platform === 'youtube' ? '▶ YT' : '🎵 TT'}
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                      {lead.channel === REAL_TAASEEGUN_PAGE_ID ? (
+                        <span style={{
+                          fontSize: '0.66rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: '#fffbeb',
+                          color: '#b45309',
+                          fontWeight: '700',
+                          border: '1px solid #fde68a'
+                        }}>
+                          🏠 ทาสีกัน
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: '0.66rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: '#eff6ff',
+                          color: '#1d4ed8',
+                          fontWeight: '700',
+                          border: '1px solid #bfdbfe'
+                        }}>
+                          🎨 Good Vibes
+                        </span>
+                      )}
                       <span style={{ color: '#cbd5e1' }}>•</span>
                       {renderSourceTypeBadge(lead.sourceType)}
                       
