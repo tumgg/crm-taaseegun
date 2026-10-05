@@ -146,24 +146,58 @@ export default function UnifiedChatCenter({
       if (allNewLeads.length === 0) {
         if (!silent) alert('เชื่อมต่อสำเร็จ แต่ยังไม่มีบทสนทนาใหม่ใน Inbox ของเพจที่เชื่อมต่อครับ');
       } else {
-        let addedCount = 0;
+        let hasNewUpdates = false;
+        let newLeadsCount = 0;
+
         setLeads(prev => {
-          const existingIds = new Set(prev.map(l => l.id));
-          const newUnique = allNewLeads.filter(l => !existingIds.has(l.id));
-          addedCount = newUnique.length;
-          return [...newUnique, ...prev];
+          const incomingMap = new Map(allNewLeads.map(l => [l.id, l]));
+          
+          // Update existing conversations with latest messages from Facebook
+          const updatedExisting = prev.map(oldLead => {
+            const incoming = incomingMap.get(oldLead.id);
+            if (!incoming) return oldLead;
+            incomingMap.delete(oldLead.id);
+
+            const oldMsgCount = oldLead.messages?.length || 0;
+            const newMsgCount = incoming.messages?.length || 0;
+            if (newMsgCount > oldMsgCount) {
+              hasNewUpdates = true;
+            }
+
+            return {
+              ...oldLead,
+              inquiry: incoming.inquiry || oldLead.inquiry,
+              date: incoming.date || oldLead.date,
+              unreadCount: incoming.unreadCount ?? oldLead.unreadCount,
+              status: (incoming.unreadCount && incoming.unreadCount > 0) ? 'ทักใหม่ (New)' : oldLead.status,
+              customerPsid: incoming.customerPsid || oldLead.customerPsid,
+              activePageToken: incoming.activePageToken || oldLead.activePageToken,
+              messages: (incoming.messages && incoming.messages.length > 0)
+                ? incoming.messages 
+                : oldLead.messages
+            };
+          });
+
+          // Brand new leads that were not in state yet
+          const completelyNew = Array.from(incomingMap.values());
+          newLeadsCount = completelyNew.length;
+          if (newLeadsCount > 0) hasNewUpdates = true;
+
+          return [...completelyNew, ...updatedExisting];
         });
 
-        if (isSoundEnabled && (addedCount > 0 || !silent)) {
+        if (isSoundEnabled && (hasNewUpdates || !silent)) {
           playNotificationSound();
         }
 
-        if (!silent || addedCount > 0) {
-          setSelectedLeadId(allNewLeads[0].id);
-          setToastNotification(addedCount > 0 
-            ? `🔔 มีแชทใหม่เข้ามา ${addedCount} รายการ! (${pageSummaries.join(', ')})`
+        if (!silent || hasNewUpdates) {
+          if (newLeadsCount > 0 && allNewLeads.length > 0) {
+            setSelectedLeadId(allNewLeads[0].id);
+          }
+          setToastNotification(hasNewUpdates 
+            ? `🔔 มีข้อความใหม่เข้ามา! (${pageSummaries.join(', ')})`
             : `🎉 ซิงค์แชทสดสำเร็จ! รวม ${allNewLeads.length} แชทจริงจาก Facebook (${pageSummaries.join(', ')})`);
-          setTimeout(() => setToastNotification(null), 6000);
+          setTimeout(() => setToastNotification(null), 5000);
         }
       }
     } catch (err) {
