@@ -53,6 +53,80 @@ import {
 } from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
 
+export function getPageTheme(channelId) {
+  if (channelId === REAL_TAASEEGUN_PAGE_ID) {
+    return {
+      name: 'บริษัท ทาสีกัน จำกัด',
+      shortName: 'ทาสีกัน',
+      icon: '🏠',
+      primary: '#d97706',
+      darkText: '#92400e',
+      bg: '#fffdf5',
+      bgHover: '#fef9c3',
+      bgSelected: '#fef08a',
+      borderLeft: '#d97706',
+      borderSelected: '#b45309',
+      cardBorder: '#fef08a',
+      badgeBg: '#fef3c7',
+      badgeText: '#92400e',
+      badgeBorder: '#fde68a'
+    };
+  }
+  if (channelId === REAL_ROOMS_PAINTING_PAGE_ID) {
+    return {
+      name: 'RoomsPainting',
+      shortName: 'RoomsPainting',
+      icon: '🏢',
+      primary: '#7c3aed',
+      darkText: '#5b21b6',
+      bg: '#faf5ff',
+      bgHover: '#f3e8ff',
+      bgSelected: '#ede9fe',
+      borderLeft: '#7c3aed',
+      borderSelected: '#6d28d9',
+      cardBorder: '#e9d5ff',
+      badgeBg: '#ede9fe',
+      badgeText: '#6d28d9',
+      badgeBorder: '#ddd6fe'
+    };
+  }
+  if (channelId === REAL_TEXTURE_BEAR_PAGE_ID) {
+    return {
+      name: 'ช่างหมี เทกเจอร์',
+      shortName: 'ช่างหมี',
+      icon: '🐻',
+      primary: '#ea580c',
+      darkText: '#9a3412',
+      bg: '#fff8f3',
+      bgHover: '#ffedd5',
+      bgSelected: '#fed7aa',
+      borderLeft: '#ea580c',
+      borderSelected: '#c2410c',
+      cardBorder: '#fed7aa',
+      badgeBg: '#ffedd5',
+      badgeText: '#c2410c',
+      badgeBorder: '#fed7aa'
+    };
+  }
+  // Default: Good Vibes
+  return {
+    name: 'Good Vibes',
+    shortName: 'Good Vibes',
+    icon: '🎨',
+    primary: '#1d4ed8',
+    darkText: '#1e40af',
+    bg: '#f0f7ff',
+    bgHover: '#e0f2fe',
+    bgSelected: '#dbeafe',
+    borderLeft: '#2563eb',
+    borderSelected: '#1d4ed8',
+    cardBorder: '#bfdbfe',
+    badgeBg: '#eff6ff',
+    badgeText: '#1d4ed8',
+    badgeBorder: '#bfdbfe'
+  };
+}
+
 export default function UnifiedChatCenter({ 
   leads, 
   setLeads, 
@@ -347,6 +421,7 @@ export default function UnifiedChatCenter({
 
   // Default active lead selection
   const activeLead = leads.find(l => l.id === selectedLeadId) || leads[0];
+  const activeTheme = getPageTheme(activeLead?.channel);
 
   // Auto scroll to bottom of chat messages container ONLY (without scrolling the browser window)
   useEffect(() => {
@@ -1014,85 +1089,71 @@ export default function UnifiedChatCenter({
                 const lastMsg = lead.messages && lead.messages.length > 0 
                   ? lead.messages[lead.messages.length - 1].text 
                   : lead.inquiry;
+                const theme = getPageTheme(lead.channel);
 
                 return (
                   <div
                     key={lead.id}
                     onClick={() => setSelectedLeadId(lead.id)}
                     style={{
-                      padding: '12px 14px',
-                      borderBottom: '1px solid #f1f5f9',
+                      padding: '11px 13px',
+                      margin: '4px 6px',
+                      borderRadius: '10px',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? '#ffffff' : (hasUnread ? '#fffdfa' : 'transparent'),
-                      borderLeft: isSelected ? '4px solid #1877f2' : (hasDueFollowUp ? '4px solid #ef4444' : (hasUnread ? '4px solid #f59e0b' : '4px solid transparent')),
-                      transition: 'var(--transition)'
+                      backgroundColor: isSelected ? theme.bgSelected : (hasUnread ? theme.bgHover : theme.bg),
+                      borderLeft: `5px solid ${isSelected ? theme.borderSelected : (hasDueFollowUp ? '#ef4444' : theme.borderLeft)}`,
+                      borderTop: `1px solid ${isSelected ? theme.primary : theme.cardBorder}`,
+                      borderRight: `1px solid ${isSelected ? theme.primary : theme.cardBorder}`,
+                      borderBottom: `1px solid ${isSelected ? theme.primary : theme.cardBorder}`,
+                      boxShadow: isSelected ? `0 2px 8px ${theme.primary}25` : '0 1px 2px rgba(0,0,0,0.03)',
+                      transition: 'all 0.15s ease'
                     }}
                     onMouseOver={(e) => {
-                      if (!isSelected) e.currentTarget.style.backgroundColor = '#f1f5f9';
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = theme.bgHover;
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      }
                     }}
                     onMouseOut={(e) => {
-                      if (!isSelected) e.currentTarget.style.backgroundColor = hasUnread ? '#fffdfa' : 'transparent';
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = hasUnread ? theme.bgHover : theme.bg;
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '3px' }}>
-                      <div style={{ fontWeight: hasUnread ? '800' : '600', fontSize: '0.85rem', color: '#0f172a', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ 
+                        fontWeight: hasUnread || isSelected ? '800' : '700', 
+                        fontSize: '0.86rem', 
+                        color: isSelected ? theme.darkText : '#0f172a', 
+                        maxWidth: '180px', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap' 
+                      }}>
                         {lead.name}
                       </div>
-                      <span style={{ fontSize: '0.68rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: '500', whiteSpace: 'nowrap' }}>
                         {lead.date?.split(' ')[1] || 'เมื่อสักครู่'}
                       </span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                      {lead.channel === REAL_TAASEEGUN_PAGE_ID ? (
-                        <span style={{
-                          fontSize: '0.66rem',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: '#fffbeb',
-                          color: '#b45309',
-                          fontWeight: '700',
-                          border: '1px solid #fde68a'
-                        }}>
-                          🏠 ทาสีกัน
-                        </span>
-                      ) : lead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? (
-                        <span style={{
-                          fontSize: '0.66rem',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: '#f5f3ff',
-                          color: '#6d28d9',
-                          fontWeight: '700',
-                          border: '1px solid #ddd6fe'
-                        }}>
-                          🏢 RoomsPainting
-                        </span>
-                      ) : lead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? (
-                        <span style={{
-                          fontSize: '0.66rem',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: '#fff7ed',
-                          color: '#c2410c',
-                          fontWeight: '700',
-                          border: '1px solid #fed7aa'
-                        }}>
-                          🐻 ช่างหมี
-                        </span>
-                      ) : (
-                        <span style={{
-                          fontSize: '0.66rem',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: '#eff6ff',
-                          color: '#1d4ed8',
-                          fontWeight: '700',
-                          border: '1px solid #bfdbfe'
-                        }}>
-                          🎨 Good Vibes
-                        </span>
-                      )}
+                      <span style={{
+                        fontSize: '0.66rem',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: theme.badgeBg,
+                        color: theme.badgeText,
+                        fontWeight: '800',
+                        border: `1px solid ${theme.badgeBorder}`,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px'
+                      }}>
+                        {theme.icon} {theme.shortName}
+                      </span>
+
                       <span style={{ color: '#cbd5e1' }}>•</span>
                       {renderSourceTypeBadge(lead.sourceType)}
                       
@@ -1113,7 +1174,7 @@ export default function UnifiedChatCenter({
 
                     <div style={{
                       fontSize: '0.76rem',
-                      color: hasUnread ? '#1e293b' : '#64748b',
+                      color: hasUnread ? '#0f172a' : '#475569',
                       fontWeight: hasUnread ? '600' : '400',
                       lineHeight: '1.35',
                       maxHeight: '34px',
@@ -1121,7 +1182,8 @@ export default function UnifiedChatCenter({
                       textOverflow: 'ellipsis',
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical'
+                      WebkitBoxOrient: 'vertical',
+                      wordBreak: 'break-word'
                     }}>
                       {lastMsg}
                     </div>
@@ -1148,11 +1210,12 @@ export default function UnifiedChatCenter({
               {/* Active Chat Header */}
               <div style={{
                 padding: '12px 18px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: `2px solid ${activeTheme.cardBorder}`,
+                borderTop: `3px solid ${activeTheme.primary}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: '#ffffff',
+                backgroundColor: activeTheme.bg,
                 flexShrink: 0
               }}>
                 <div>
@@ -1161,15 +1224,18 @@ export default function UnifiedChatCenter({
                       {activeLead.name}
                     </h3>
                     <span style={{
-                      fontSize: '0.7rem',
-                      padding: '2px 7px',
+                      fontSize: '0.72rem',
+                      padding: '3px 8px',
                       borderRadius: '6px',
-                      backgroundColor: '#eff6ff',
-                      color: '#1d4ed8',
-                      fontWeight: '700',
-                      border: '1px solid #bfdbfe'
+                      backgroundColor: activeTheme.badgeBg,
+                      color: activeTheme.badgeText,
+                      fontWeight: '800',
+                      border: `1px solid ${activeTheme.badgeBorder}`,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
                     }}>
-                      {activeLead.channelName}
+                      {activeTheme.icon} {activeLead.channelName || activeTheme.name}
                     </span>
 
                     {/* AI Intent Badge */}
@@ -1326,7 +1392,7 @@ export default function UnifiedChatCenter({
                       }}
                     >
                       <div style={{
-                        backgroundColor: isAdmin ? '#1877f2' : '#ffffff',
+                        backgroundColor: isAdmin ? activeTheme.primary : '#ffffff',
                         color: isAdmin ? '#ffffff' : '#1e293b',
                         border: isAdmin ? 'none' : '1px solid #e2e8f0',
                         borderRadius: isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
@@ -1474,7 +1540,7 @@ export default function UnifiedChatCenter({
                       transition: 'border-color 0.2s, background-color 0.2s'
                     }}
                     onFocus={(e) => {
-                      e.target.style.borderColor = '#1877f2';
+                      e.target.style.borderColor = activeTheme.primary;
                       e.target.style.backgroundColor = '#ffffff';
                     }}
                     onBlur={(e) => {
@@ -1489,7 +1555,7 @@ export default function UnifiedChatCenter({
                     style={{
                       padding: '0 18px',
                       borderRadius: '10px',
-                      backgroundColor: replyText.trim() ? '#1877f2' : '#cbd5e1',
+                      backgroundColor: replyText.trim() ? activeTheme.primary : '#cbd5e1',
                       color: '#ffffff',
                       fontWeight: '700',
                       fontSize: '0.88rem',
@@ -1499,7 +1565,7 @@ export default function UnifiedChatCenter({
                       gap: '6px',
                       cursor: replyText.trim() ? 'pointer' : 'not-allowed',
                       height: '52px',
-                      boxShadow: replyText.trim() ? '0 2px 8px rgba(24, 119, 242, 0.35)' : 'none',
+                      boxShadow: replyText.trim() ? `0 2px 8px ${activeTheme.primary}40` : 'none',
                       transition: 'var(--transition)',
                       flexShrink: 0
                     }}
@@ -1630,6 +1696,22 @@ export default function UnifiedChatCenter({
                 <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
                   ข้อมูลลูกค้า
                 </h4>
+
+                <div style={{
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: activeTheme.badgeBg,
+                  border: `1px solid ${activeTheme.badgeBorder}`,
+                  color: activeTheme.badgeText,
+                  fontSize: '0.74rem',
+                  fontWeight: '800',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  marginBottom: '10px'
+                }}>
+                  {activeTheme.icon} เพจ: {activeLead.channelName || activeTheme.name}
+                </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
