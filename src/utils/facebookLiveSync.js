@@ -1,5 +1,113 @@
 // Utility to fetch real live conversations and messages from Meta Graph API
 
+// Helper: Extract numeric millisecond timestamp of last activity from any lead object
+export function getLeadTimestamp(lead) {
+  if (!lead) return 0;
+
+  // 1. Direct timestamp if valid number
+  if (typeof lead.timestamp === 'number' && !isNaN(lead.timestamp) && lead.timestamp > 0) {
+    if (Array.isArray(lead.messages) && lead.messages.length > 0) {
+      const lastMsg = lead.messages[lead.messages.length - 1];
+      if (lastMsg?.timestamp && lastMsg.timestamp > lead.timestamp) {
+        return lastMsg.timestamp;
+      }
+    }
+    return lead.timestamp;
+  }
+
+  // 2. updatedTime ISO string from Facebook Meta Graph API
+  if (lead.updatedTime) {
+    const t = new Date(lead.updatedTime).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+
+  // 3. Check last message created_time or timestamp
+  if (Array.isArray(lead.messages) && lead.messages.length > 0) {
+    const lastMsg = lead.messages[lead.messages.length - 1];
+    if (lastMsg) {
+      if (lastMsg.timestamp && !isNaN(lastMsg.timestamp)) return lastMsg.timestamp;
+      if (lastMsg.created_time) {
+        const t = new Date(lastMsg.created_time).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+    }
+  }
+
+  // 4. Parse lead.date (e.g. "2026-10-05 14:11" or ISO string)
+  if (lead.date) {
+    let parsed = new Date(lead.date).getTime();
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+
+    const parts = String(lead.date).trim().split(' ');
+    if (parts.length >= 2) {
+      const dParts = parts[0].split('-');
+      const tParts = parts[1].split(':');
+      if (dParts.length === 3 && tParts.length >= 2) {
+        const d = new Date(
+          parseInt(dParts[0], 10),
+          parseInt(dParts[1], 10) - 1,
+          parseInt(dParts[2], 10),
+          parseInt(tParts[0], 10),
+          parseInt(tParts[1], 10)
+        );
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+    }
+  }
+
+  return 0;
+}
+
+// Helper: Always sort array of leads by newest activity first
+export function sortLeadsByLatest(leads) {
+  if (!Array.isArray(leads)) return [];
+  return [...leads].sort((a, b) => getLeadTimestamp(b) - getLeadTimestamp(a));
+}
+
+// Helper: Format conversation time friendly (e.g., 2 นาทีก่อน, 14:49, เมื่อวาน, 24 ก.ย.)
+export function formatConversationTime(lead) {
+  const ts = getLeadTimestamp(lead);
+  if (!ts) {
+    return lead?.date?.split(' ')[1] || 'เมื่อสักครู่';
+  }
+
+  const msgDate = new Date(ts);
+  const now = new Date();
+
+  const diffMs = now.getTime() - ts;
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+  if (diffMinutes < 1) return 'เมื่อสักครู่';
+  if (diffMinutes < 60) return `${diffMinutes} นาทีก่อน`;
+
+  const isToday =
+    msgDate.getDate() === now.getDate() &&
+    msgDate.getMonth() === now.getMonth() &&
+    msgDate.getFullYear() === now.getFullYear();
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${pad(msgDate.getHours())}:${pad(msgDate.getMinutes())}`;
+
+  if (isToday) return timeStr;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    msgDate.getDate() === yesterday.getDate() &&
+    msgDate.getMonth() === yesterday.getMonth() &&
+    msgDate.getFullYear() === yesterday.getFullYear();
+
+  if (isYesterday) return `เมื่อวาน ${timeStr}`;
+
+  const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  if (msgDate.getFullYear() === now.getFullYear()) {
+    return `${msgDate.getDate()} ${thaiMonths[msgDate.getMonth()]}`;
+  }
+
+  const thaiShortYear = (msgDate.getFullYear() + 543) % 100;
+  return `${msgDate.getDate()} ${thaiMonths[msgDate.getMonth()]} ${thaiShortYear}`;
+}
+
 export async function fetchLiveFacebookConversations(pageId, pageToken, pageName) {
   try {
     const url = `https://graph.facebook.com/v19.0/${pageId}/conversations?fields=id,snippet,updated_time,unread_count,senders&access_token=${encodeURIComponent(pageToken)}`;
@@ -14,8 +122,8 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
       return [];
     }
 
-    // Process each conversation and fetch message details
-    const leadsPromises = data.data.slice(0, 10).map(async (conv, idx) => {
+    // Process each conversation and fetch message details (top 15 conversations per page)
+    const leadsPromises = data.data.slice(0, 15).map(async (conv, idx) => {
       try {
         // Find customer sender (exclude the page itself)
         const customerSender = conv.senders?.data?.find(s => s.id !== pageId) || conv.senders?.data?.[0];
@@ -61,7 +169,9 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
                 adminName: isFromPage ? (pageName || 'แอดมินเพจ') : undefined,
                 text: text,
                 attachments: parsedAttachments,
-                time: timeStr
+                time: timeStr,
+                created_time: m.created_time,
+                timestamp: m.created_time ? new Date(m.created_time).getTime() : Date.now()
               };
             });
           }
@@ -77,14 +187,17 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
               sender: 'lead',
               text: conv.snippet,
               attachments: [],
-              time: 'ล่าสุด'
+              time: 'ล่าสุด',
+              timestamp: conv.updated_time ? new Date(conv.updated_time).getTime() : Date.now()
             }
           ];
         }
 
         const updateDate = conv.updated_time ? new Date(conv.updated_time) : new Date();
-        const dateStr = updateDate.toISOString().slice(0, 10);
-        const timeStr = `${String(updateDate.getHours()).padStart(2, '0')}:${String(updateDate.getMinutes()).padStart(2, '0')}`;
+        const convTimestamp = !isNaN(updateDate.getTime()) ? updateDate.getTime() : Date.now();
+        const pad = (n) => String(n).padStart(2, '0');
+        const dateStr = `${updateDate.getFullYear()}-${pad(updateDate.getMonth() + 1)}-${pad(updateDate.getDate())}`;
+        const timeStr = `${pad(updateDate.getHours())}:${pad(updateDate.getMinutes())}`;
 
         // Clean inquiry snippet if it had placeholder
         const latestMsg = messageList.length > 0 ? messageList[messageList.length - 1] : null;
@@ -92,6 +205,9 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
         if (latestMsg && latestMsg.attachments?.length > 0 && (!cleanInquiry || cleanInquiry.includes('ไฟล์แนบ') || cleanInquiry.includes('สติกเกอร์') || cleanInquiry === 'สนใจสอบถามบริการ')) {
           cleanInquiry = latestMsg.text;
         }
+
+        const latestMsgTime = latestMsg?.timestamp || (latestMsg?.created_time ? new Date(latestMsg.created_time).getTime() : 0);
+        const effectiveTimestamp = Math.max(convTimestamp, latestMsgTime || 0);
 
         return {
           id: `fb-live-${conv.id}`,
@@ -107,6 +223,9 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
           dealValue: 0,
           status: (conv.unread_count && conv.unread_count > 0) ? 'ทักใหม่ (New)' : 'ติดต่อแล้ว',
           date: `${dateStr} ${timeStr}`,
+          updatedTime: conv.updated_time || updateDate.toISOString(),
+          timestamp: effectiveTimestamp,
+          lastActivity: effectiveTimestamp,
           followUpDate: null,
           admin: 'ช่างเสือ ทาสี',
           notes: `ทักมาจากโฆษณา/Inbox หน้าเพจจริง (${conv.id})`,
@@ -125,7 +244,7 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
     });
 
     const results = (await Promise.all(leadsPromises)).filter(Boolean);
-    return results;
+    return sortLeadsByLatest(results);
   } catch (error) {
     console.error('Error fetching live Facebook conversations:', error);
     throw error;

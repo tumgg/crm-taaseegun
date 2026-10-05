@@ -59,7 +59,10 @@ import {
   replyToFacebookComment, 
   replyToFacebookCommentWithAttachment,
   sendFacebookPrivateReply,
-  normalizeAttachment
+  normalizeAttachment,
+  sortLeadsByLatest,
+  formatConversationTime,
+  getLeadTimestamp
 } from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
@@ -499,6 +502,9 @@ export default function UnifiedChatCenter({
               ...oldLead,
               inquiry: incoming.inquiry || oldLead.inquiry,
               date: incoming.date || oldLead.date,
+              timestamp: incoming.timestamp || oldLead.timestamp || (incoming.updatedTime ? new Date(incoming.updatedTime).getTime() : Date.now()),
+              updatedTime: incoming.updatedTime || oldLead.updatedTime,
+              lastActivity: incoming.lastActivity || incoming.timestamp || oldLead.lastActivity || oldLead.timestamp,
               unreadCount: incoming.unreadCount ?? oldLead.unreadCount,
               status: (incoming.unreadCount && incoming.unreadCount > 0) ? 'ทักใหม่ (New)' : oldLead.status,
               customerPsid: incoming.customerPsid || oldLead.customerPsid,
@@ -514,7 +520,8 @@ export default function UnifiedChatCenter({
           newLeadsCount = completelyNew.length;
           if (newLeadsCount > 0) hasNewUpdates = true;
 
-          return [...completelyNew, ...updatedExisting];
+          const merged = [...completelyNew, ...updatedExisting];
+          return sortLeadsByLatest(merged);
         });
 
         if (isSoundEnabled && (hasNewUpdates || !silent)) {
@@ -618,10 +625,14 @@ export default function UnifiedChatCenter({
                 if (existingMsgs.some(m => m.id === newIncomingMessage.id || (m.text === newIncomingMessage.text && m.time === newIncomingMessage.time))) {
                   return lead;
                 }
+                const now = Date.now();
                 return {
                   ...lead,
                   inquiry: displayText,
                   date: `${dateStr} ${timeStr}`,
+                  timestamp: now,
+                  lastActivity: now,
+                  updatedTime: new Date(now).toISOString(),
                   status: 'ทักใหม่ (New)',
                   customerPsid: newRow.sender_psid,
                   commentId: newRow.raw_event?.commentId || lead.commentId,
@@ -635,8 +646,9 @@ export default function UnifiedChatCenter({
             });
 
             if (!isFound) {
+              const now = Date.now();
               const brandNewLead = {
-                id: isCommentEvent ? `fb-comment-${newRow.raw_event?.commentId || Date.now()}` : `fb-live-${newRow.sender_psid}`,
+                id: isCommentEvent ? `fb-comment-${newRow.raw_event?.commentId || now}` : `fb-live-${newRow.sender_psid}`,
                 name: newRow.sender_name || (isCommentEvent ? 'ลูกค้าใต้โพสต์' : `ลูกค้าใหม่ Facebook #${newRow.sender_psid.slice(-4)}`),
                 platform: 'facebook',
                 channel: newRow.page_id,
@@ -651,6 +663,9 @@ export default function UnifiedChatCenter({
                 dealValue: 0,
                 status: 'ทักใหม่ (New)',
                 date: `${dateStr} ${timeStr}`,
+                timestamp: now,
+                lastActivity: now,
+                updatedTime: new Date(now).toISOString(),
                 followUpDate: null,
                 admin: 'แอดมินเพจ',
                 notes: isCommentEvent 
@@ -664,10 +679,10 @@ export default function UnifiedChatCenter({
                 postId: newRow.raw_event?.postId || null,
                 messages: [newIncomingMessage]
               };
-              return [brandNewLead, ...updated];
+              return sortLeadsByLatest([brandNewLead, ...updated]);
             }
 
-            return updated;
+            return sortLeadsByLatest(updated);
           });
 
           if (isSoundEnabled) {
@@ -713,24 +728,26 @@ export default function UnifiedChatCenter({
     return target <= today;
   };
 
-  // Filter conversations
-  const filteredConversations = leads.filter(lead => {
-    const matchesSearch = 
-      (lead.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (lead.inquiry || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (lead.sourceTitle && lead.sourceTitle.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Filter conversations and sort so the TRULY latest activity is on top across all pages
+  const filteredConversations = sortLeadsByLatest(
+    leads.filter(lead => {
+      const matchesSearch = 
+        (lead.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (lead.inquiry || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (lead.sourceTitle && lead.sourceTitle.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    let matchesType = true;
-    if (filterType === 'due_followup') {
-      matchesType = isFollowUpDue(lead.followUpDate);
-    } else if (filterType !== 'all') {
-      matchesType = lead.sourceType === filterType;
-    }
+      let matchesType = true;
+      if (filterType === 'due_followup') {
+        matchesType = isFollowUpDue(lead.followUpDate);
+      } else if (filterType !== 'all') {
+        matchesType = lead.sourceType === filterType;
+      }
 
-    const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? lead.platform === 'facebook' : lead.channel === filterChannel);
+      const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? lead.platform === 'facebook' : lead.channel === filterChannel);
 
-    return matchesSearch && matchesType && matchesChannel;
-  });
+      return matchesSearch && matchesType && matchesChannel;
+    })
+  );
 
   // Intent analysis of current active lead
   const currentIntent = activeLead ? analyzeMessageIntent(
@@ -772,6 +789,11 @@ export default function UnifiedChatCenter({
       isCommentReply: replyMode === 'comment'
     };
 
+    const now = Date.now();
+    const pad = (n) => String(n).padStart(2, '0');
+    const d = new Date(now);
+    const localDateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
     const updatedLeads = leads.map(lead => {
       if (lead.id === activeLead.id) {
         const existingMessages = lead.messages || [];
@@ -783,13 +805,17 @@ export default function UnifiedChatCenter({
           ...lead,
           status: nextStatus,
           inquiry: displayMsgText || lead.inquiry,
+          date: localDateStr,
+          timestamp: now,
+          lastActivity: now,
+          updatedTime: new Date(now).toISOString(),
           messages: [...existingMessages, newMessage]
         };
       }
       return lead;
     });
 
-    setLeads(updatedLeads);
+    setLeads(sortLeadsByLatest(updatedLeads));
     setReplyText('');
     handleRemoveAttachment();
 
@@ -1517,8 +1543,13 @@ export default function UnifiedChatCenter({
                         }}>
                           {lead.name}
                         </div>
-                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: '500', whiteSpace: 'nowrap' }}>
-                          {lead.date?.split(' ')[1] || 'เมื่อสักครู่'}
+                        <span style={{ 
+                          fontSize: '0.70rem', 
+                          color: hasUnread ? '#2563eb' : '#64748b', 
+                          fontWeight: hasUnread ? '700' : '500', 
+                          whiteSpace: 'nowrap' 
+                        }}>
+                          {formatConversationTime(lead)}
                         </span>
                       </div>
 

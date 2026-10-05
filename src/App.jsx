@@ -20,13 +20,13 @@ import {
   REAL_TEXTURE_BEAR_PAGE_ID, 
   REAL_TEXTURE_BEAR_TOKEN
 } from './data/mockData';
-import { fetchLiveFacebookConversations } from './utils/facebookLiveSync';
+import { fetchLiveFacebookConversations, sortLeadsByLatest } from './utils/facebookLiveSync';
 import { 
   loadStoredLeads, 
   saveStoredLeads, 
   loadStoredPages, 
   saveStoredPages, 
-  exportBackupJson,
+  exportBackupJson, 
   resetToDefaults 
 } from './utils/storage';
 
@@ -51,7 +51,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('chat'); // Default to 'chat' for instant unified replying!
   const [facebookPages, setFacebookPages] = useState(() => loadStoredPages(initialFacebookPages));
-  const [leads, setLeads] = useState(() => loadStoredLeads(initialLeads));
+  const [leads, setLeads] = useState(() => sortLeadsByLatest(loadStoredLeads(initialLeads)));
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
@@ -124,11 +124,14 @@ export default function App() {
                 admin: oldLead.admin || incoming.admin,
                 dealValue: oldLead.dealValue || incoming.dealValue,
                 notes: oldLead.notes || incoming.notes,
-                messages: (incoming.messages && incoming.messages.length > 0) ? incoming.messages : oldLead.messages
+                messages: (incoming.messages && incoming.messages.length > 0) ? incoming.messages : oldLead.messages,
+                timestamp: incoming.timestamp || oldLead.timestamp || (incoming.updatedTime ? new Date(incoming.updatedTime).getTime() : Date.now()),
+                updatedTime: incoming.updatedTime || oldLead.updatedTime
               };
             });
             const completelyNew = Array.from(incomingMap.values());
-            return [...completelyNew, ...updatedExisting];
+            const merged = [...completelyNew, ...updatedExisting];
+            return sortLeadsByLatest(merged);
           });
         }
       } catch (err) {
