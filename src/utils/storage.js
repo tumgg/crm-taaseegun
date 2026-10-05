@@ -2,7 +2,9 @@ import {
   REAL_GOOD_VIBES_PAGE_ID, 
   REAL_GOOD_VIBES_TOKEN,
   REAL_TAASEEGUN_PAGE_ID,
-  REAL_TAASEEGUN_TOKEN
+  REAL_TAASEEGUN_TOKEN,
+  REAL_ROOMS_PAINTING_PAGE_ID,
+  REAL_ROOMS_PAINTING_TOKEN
 } from '../data/mockData';
 
 const LEADS_STORAGE_KEY = 'omnisocial_leads_v2';
@@ -47,10 +49,11 @@ export function loadStoredPages(fallbackPages) {
     if (data) {
       let parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Keep ONLY real active pages (Good Vibes, Taaseegun, or custom pages with valid tokens)
+        // Keep ONLY real active pages (Good Vibes, Taaseegun, RoomsPainting, or custom pages with valid tokens)
         let activeOnly = parsed.filter(p => 
           p.id === REAL_GOOD_VIBES_PAGE_ID || 
           p.id === REAL_TAASEEGUN_PAGE_ID ||
+          p.id === REAL_ROOMS_PAINTING_PAGE_ID ||
           (p.activePageToken && p.activePageToken.length > 50 && !p.activePageToken.includes('...'))
         );
 
@@ -70,6 +73,15 @@ export function loadStoredPages(fallbackPages) {
           if (taaseegun) activeOnly.push(taaseegun);
         } else {
           taaseegun.activePageToken = REAL_TAASEEGUN_TOKEN;
+        }
+
+        // Ensure RoomsPainting page is present with the verified real token
+        let roomsPainting = activeOnly.find(p => p.id === REAL_ROOMS_PAINTING_PAGE_ID);
+        if (!roomsPainting) {
+          roomsPainting = fallbackPages.find(p => p.id === REAL_ROOMS_PAINTING_PAGE_ID) || fallbackPages[2];
+          if (roomsPainting) activeOnly.push(roomsPainting);
+        } else {
+          roomsPainting.activePageToken = REAL_ROOMS_PAINTING_TOKEN;
         }
 
         localStorage.setItem(PAGES_STORAGE_KEY, JSON.stringify(activeOnly));

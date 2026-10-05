@@ -6,6 +6,9 @@ export const REAL_GOOD_VIBES_TOKEN = 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXm
 export const REAL_TAASEEGUN_PAGE_ID = '110842514841725';
 export const REAL_TAASEEGUN_TOKEN = 'EAAZCpCdzNLVIBSq1P5PtexPOiXZAT7XQVZCuRqdSFWQZA8oLdDuT6SHStVgVUbTx7jljKvVLHnNDsDMw0817PC8ZC6ZCumGm2ZB4cRP0Jy7eNzs7cCfp6zIv30aSZBZA1tnZBPQ0F9w6711LJuiO35ZBWEJb05KkcbjZCTZCCEGUSjKDBpa3T5zwyxZBdr9Fq5NnMFl3kSXlGTj6p3';
 
+export const REAL_ROOMS_PAINTING_PAGE_ID = '100873871740668';
+export const REAL_ROOMS_PAINTING_TOKEN = 'EAAZCpCdzNLVIBSjdqZAM4wDDcc6vbF3CmsElAw4AVaGm18LlWZAD0nH2M8fyZC7fY6sFtBLGW7ALtRZAp46DZAJOXW7U7hz0xBkms7HSljk568IZBHVRGyPVpsKZBebpgZAsmOj7J7ljAzV2w3pUtq5tjcsZC8vO4m3urpE3dVZAHXmP7RTDccb5hWpqwj8A5mYalXxM3eg4YQI';
+
 export const initialFacebookPages = [
   {
     id: REAL_GOOD_VIBES_PAGE_ID,
@@ -84,6 +87,45 @@ export const initialFacebookPages = [
       linkClicks: '31.5K',
       totalShares: '14.8K',
       inboxLeadsCount: 86
+    }
+  },
+  {
+    id: REAL_ROOMS_PAINTING_PAGE_ID,
+    name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting',
+    handle: '@roomspainting.condo',
+    category: 'ช่างทาสีคอนโด / ทาสีภายในมืออาชีพ',
+    avatar: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150&auto=format&fit=crop&q=80',
+    followers: 32400,
+    reach: 124000,
+    engagementRate: '6.1%',
+    growthRate: '+19.5%',
+    activePageToken: REAL_ROOMS_PAINTING_TOKEN,
+    demographics: {
+      gender: { women: 54, men: 43, other: 3 },
+      ageRange: [
+        { age: '18-24', pct: 18 },
+        { age: '25-34', pct: 54 },
+        { age: '35-44', pct: 20 },
+        { age: '45-54', pct: 6 },
+        { age: '55+', pct: 2 }
+      ],
+      topCities: [
+        { city: 'กรุงเทพมหานคร (Bangkok)', pct: 75 },
+        { city: 'นนทบุรี (Nonthaburi)', pct: 12 },
+        { city: 'สมุทรปราการ (Samut Prakan)', pct: 8 },
+        { city: 'ปทุมธานี (Pathum Thani)', pct: 5 }
+      ],
+      bestTimes: [
+        'วันจันทร์ 19:00 - 22:00 น.',
+        'วันพุธ 20:00 - 23:00 น.',
+        'วันเสาร์ 11:00 - 15:00 น.'
+      ]
+    },
+    metrics: {
+      profileViews: '42.8K',
+      linkClicks: '24.1K',
+      totalShares: '11.2K',
+      inboxLeadsCount: 58
     }
   }
 ];

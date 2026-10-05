@@ -37,7 +37,9 @@ import {
   REAL_GOOD_VIBES_PAGE_ID,
   REAL_GOOD_VIBES_TOKEN,
   REAL_TAASEEGUN_PAGE_ID,
-  REAL_TAASEEGUN_TOKEN 
+  REAL_TAASEEGUN_TOKEN,
+  REAL_ROOMS_PAINTING_PAGE_ID,
+  REAL_ROOMS_PAINTING_TOKEN 
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
@@ -88,6 +90,15 @@ export default function UnifiedChatCenter({
       });
     }
 
+    // Ensure RoomsPainting is included
+    if (!pagesToSync.some(p => p.id === REAL_ROOMS_PAINTING_PAGE_ID)) {
+      pagesToSync.push({
+        id: REAL_ROOMS_PAINTING_PAGE_ID,
+        name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting',
+        activePageToken: REAL_ROOMS_PAINTING_TOKEN
+      });
+    }
+
     setIsSyncingFb(true);
     try {
       const syncPromises = pagesToSync.map(async (page) => {
@@ -107,7 +118,13 @@ export default function UnifiedChatCenter({
       for (const res of results) {
         if (res.leads.length > 0) {
           allNewLeads.push(...res.leads);
-          const shortName = res.pageName.includes('Good Vibes') ? 'Good Vibes' : res.pageName.includes('ทาสีกัน') ? 'ทาสีกัน' : res.pageName;
+          const shortName = res.pageName.includes('Good Vibes') 
+            ? 'Good Vibes' 
+            : res.pageName.includes('ทาสีกัน') 
+              ? 'ทาสีกัน' 
+              : res.pageName.includes('RoomsPainting') 
+                ? 'RoomsPainting' 
+                : res.pageName;
           pageSummaries.push(`${shortName}: ${res.leads.length} แชท`);
         }
       }
@@ -467,10 +484,10 @@ export default function UnifiedChatCenter({
               cursor: isSyncingFb ? 'not-allowed' : 'pointer',
               opacity: isSyncingFb ? 0.75 : 1
             }}
-            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้ (Good Vibes & ทาสีกัน)"
+            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้ (Good Vibes, ทาสีกัน & RoomsPainting)"
           >
             <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
-            {isSyncingFb ? 'กำลังดึงแชทสดทุกเพจ...' : '⚡ ดึงแชทสดจากทุกเพจ Facebook (Good Vibes & ทาสีกัน)'}
+            {isSyncingFb ? 'กำลังดึงแชทสดทุกเพจ...' : '⚡ ดึงแชทสดจากทุกเพจ Facebook (3 เพจ)'}
           </button>
         </div>
       </div>
@@ -575,6 +592,26 @@ export default function UnifiedChatCenter({
                 title="บริษัท ทาสีกัน จำกัด"
               >
                 🏠 ทาสีกัน
+              </button>
+              <button
+                onClick={() => setFilterChannel(REAL_ROOMS_PAINTING_PAGE_ID)}
+                style={{
+                  flex: 1,
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '700' : '500',
+                  backgroundColor: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '#7c3aed' : '#f1f5f9',
+                  color: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '#ffffff' : '#64748b',
+                  border: 'none',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+                title="ทาสีคอนโด RoomsPainting"
+              >
+                🏢 RoomsPainting
               </button>
             </div>
 
@@ -727,6 +764,18 @@ export default function UnifiedChatCenter({
                           border: '1px solid #fde68a'
                         }}>
                           🏠 ทาสีกัน
+                        </span>
+                      ) : lead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? (
+                        <span style={{
+                          fontSize: '0.66rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: '#f5f3ff',
+                          color: '#6d28d9',
+                          fontWeight: '700',
+                          border: '1px solid #ddd6fe'
+                        }}>
+                          🏢 RoomsPainting
                         </span>
                       ) : (
                         <span style={{
