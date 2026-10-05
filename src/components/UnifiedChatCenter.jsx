@@ -60,8 +60,8 @@ import {
   sendFacebookPrivateReply,
   normalizeAttachment
 } from '../utils/facebookLiveSync';
-import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
+import SavedRepliesModal from './SavedRepliesModal';
 
 export function getPageTheme(channelId) {
   if (channelId === REAL_TAASEEGUN_PAGE_ID) {
@@ -271,6 +271,50 @@ export default function UnifiedChatCenter({
 
   // Portfolio & Texture Catalog Modal State
   const [isPortfolioCatalogOpen, setIsPortfolioCatalogOpen] = useState(false);
+
+  // Saved Replies Modal State (การตอบกลับที่บันทึกไว้ พร้อมรูปภาพ)
+  const [isSavedRepliesOpen, setIsSavedRepliesOpen] = useState(false);
+
+  // Handle Selection of Saved Reply (ข้อความตอบกลับที่บันทึกไว้ พร้อมรูปภาพ)
+  const handleSelectSavedReply = async (reply) => {
+    try {
+      // 1. Set text
+      setReplyText(reply.text);
+
+      // 2. If reply has attached image, fetch and attach it as File object
+      if (reply.imageUrl) {
+        setToastNotification(`กำลังแนบรูปภาพ "${reply.title}"...`);
+        try {
+          const res = await fetch(reply.imageUrl);
+          const blob = await res.blob();
+          const cleanName = `${reply.title.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`;
+          const file = new File([blob], cleanName, { type: blob.type || 'image/jpeg' });
+          setSelectedAttachment({
+            file,
+            name: cleanName,
+            size: file.size,
+            type: 'image',
+            previewUrl: URL.createObjectURL(file)
+          });
+        } catch (fetchErr) {
+          console.warn('Direct fetch failed, falling back to direct URL attachment:', fetchErr);
+          setSelectedAttachment({
+            file: null,
+            name: `${reply.title}.jpg`,
+            size: 150000,
+            type: 'image',
+            previewUrl: reply.imageUrl
+          });
+        }
+        setToastNotification(`💬 นำการตอบกลับ "${reply.title}" พร้อมรูปภาพใส่ในช่องแชทแล้ว กดส่งได้เลย!`);
+      } else {
+        setToastNotification(`💬 นำการตอบกลับ "${reply.title}" ใส่ในช่องแชทแล้ว`);
+      }
+      setTimeout(() => setToastNotification(null), 3500);
+    } catch (err) {
+      console.error('Error applying saved reply:', err);
+    }
+  };
 
   // Fast One-Click Send from Portfolio Catalog
   const handleSelectCatalogPhoto = async (item) => {
@@ -2003,6 +2047,31 @@ export default function UnifiedChatCenter({
                   <span>🎨 คลังผลงานด่วน (Catalog)</span>
                 </button>
 
+                {/* Saved Replies Button (การตอบกลับที่บันทึกไว้) */}
+                <button
+                  type="button"
+                  onClick={() => setIsSavedRepliesOpen(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '4px 11px',
+                    borderRadius: '999px',
+                    backgroundColor: '#1877f2',
+                    color: '#ffffff',
+                    fontSize: '0.74rem',
+                    fontWeight: '700',
+                    border: 'none',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 6px rgba(24, 119, 242, 0.25)',
+                    cursor: 'pointer'
+                  }}
+                  title="เปิดรายการตอบกลับที่บันทึกไว้ พร้อมรูปภาพและข้อความสำเร็จรูป"
+                >
+                  <MessageSquare size={13} />
+                  <span>💬 การตอบกลับที่บันทึกไว้</span>
+                </button>
+
                 <span style={{ color: '#cbd5e1' }}>|</span>
 
                 {quickReplyTemplates.map(qr => (
@@ -2236,6 +2305,33 @@ export default function UnifiedChatCenter({
                   >
                     <ImageIcon size={17} />
                     {!isMobile && <span>คลังผลงาน</span>}
+                  </button>
+
+                  {/* 4. SAVED REPLIES BUTTON IN COMPOSER (การตอบกลับที่บันทึกไว้) */}
+                  <button
+                    type="button"
+                    onClick={() => setIsSavedRepliesOpen(prev => !prev)}
+                    style={{
+                      padding: isMobile ? '0 9px' : '0 12px',
+                      height: '52px',
+                      borderRadius: '10px',
+                      border: isSavedRepliesOpen ? '2px solid #1877f2' : '1.5px solid #1877f2',
+                      backgroundColor: isSavedRepliesOpen ? '#1877f2' : '#eff6ff',
+                      color: isSavedRepliesOpen ? '#ffffff' : '#1877f2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      fontSize: '0.82rem',
+                      fontWeight: '700',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="การตอบกลับที่บันทึกไว้ (เลือกข้อความสำเร็จรูป + รูปภาพ ส่งให้ลูกค้า)"
+                  >
+                    <MessageSquare size={17} />
+                    {!isMobile && <span>ตอบกลับที่บันทึกไว้</span>}
                   </button>
 
                   {/* Textarea with Paste (Ctrl+V) & Drag-Drop support */}
@@ -2683,6 +2779,13 @@ export default function UnifiedChatCenter({
         onSelectPhotoToSend={handleSelectCatalogPhoto}
         onInsertDescription={handleInsertCatalogDescription}
         activeLead={activeLead}
+      />
+
+      {/* Saved Replies (การตอบกลับที่บันทึกไว้ พร้อมรูปภาพ) Modal */}
+      <SavedRepliesModal
+        isOpen={isSavedRepliesOpen}
+        onClose={() => setIsSavedRepliesOpen(false)}
+        onSelectReply={handleSelectSavedReply}
       />
     </div>
   );
