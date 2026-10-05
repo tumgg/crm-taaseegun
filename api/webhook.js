@@ -54,14 +54,16 @@ export default async function handler(req, res) {
     if (body?.object === 'page') {
       const entries = body.entry || [];
       
-      // Process messaging events asynchronously so we can respond 200 OK immediately
+      // Process messaging events & feed changes asynchronously
       const processPromises = entries.flatMap(entry => {
         const pageId = entry.id;
         const pageToken = PAGE_TOKENS[pageId];
         const pageName = PAGE_NAMES[pageId] || 'เพจ Facebook';
         const messagingList = entry.messaging || [];
+        const changesList = entry.changes || [];
 
-        return messagingList.map(async (event) => {
+        // 1. Process Private Messenger events
+        const msgPromises = messagingList.map(async (event) => {
           try {
             // Only handle customer incoming messages (ignore echo or page self-messages)
             if (event.message && event.sender && event.sender.id !== pageId && !event.message.is_echo) {
@@ -115,13 +117,64 @@ export default async function handler(req, res) {
             console.error('Error processing single messaging event:', eventErr);
           }
         });
+
+        // 2. Process Post Comments (feed changes)
+        const commentPromises = changesList.map(async (change) => {
+          try {
+            if (change.field === 'feed') {
+              const val = change.value;
+              // Ignore if comment was made by the page itself or not an added comment
+              if (val && val.item === 'comment' && val.verb === 'add' && val.from?.id !== pageId) {
+                const commentId = val.comment_id;
+                const commenterName = val.from?.name || 'ลูกค้า Facebook ใต้โพสต์';
+                const commenterId = val.from?.id || commentId;
+                const commentText = val.message || '(สติกเกอร์/รูปภาพใต้โพสต์)';
+                const postId = val.post_id || val.parent_id;
+
+                const insertPayload = {
+                  page_id: pageId,
+                  sender_psid: commenterId,
+                  sender_name: commenterName,
+                  recipient_id: pageId,
+                  message_mid: commentId || `comment_${Date.now()}_${Math.random()}`,
+                  message_text: commentText,
+                  attachments: [],
+                  raw_event: {
+                    isComment: true,
+                    commentId: commentId,
+                    postId: postId,
+                    postTitle: `โพสต์ ID: ${postId ? postId.slice(-8) : 'หน้าเพจ'}`,
+                    pageName: pageName
+                  }
+                };
+
+                await fetch(`${SUPABASE_URL}/rest/v1/live_facebook_messages`, {
+                  method: 'POST',
+                  headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'resolution=merge-duplicates'
+                  },
+                  body: JSON.stringify(insertPayload)
+                });
+
+                console.log(`Live Post Comment inserted for Page [${pageName}] from [${commenterName}]: ${commentText}`);
+              }
+            }
+          } catch (commentErr) {
+            console.error('Error processing feed comment change:', commentErr);
+          }
+        });
+
+        return [...msgPromises, ...commentPromises];
       });
 
-      // Await all message inserts
+      // Await all message & comment inserts
       try {
         await Promise.all(processPromises);
       } catch (err) {
-        console.error('Error executing message processes:', err);
+        console.error('Error executing processes:', err);
       }
 
       // Must respond 200 OK within 3 seconds for Meta

@@ -45,7 +45,12 @@ import {
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
-import { fetchLiveFacebookConversations, sendFacebookMessengerReply } from '../utils/facebookLiveSync';
+import { 
+  fetchLiveFacebookConversations, 
+  sendFacebookMessengerReply, 
+  replyToFacebookComment, 
+  sendFacebookPrivateReply 
+} from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
 
 export default function UnifiedChatCenter({ 
@@ -243,6 +248,7 @@ export default function UnifiedChatCenter({
             time: timeStr
           };
 
+          const isCommentEvent = !!newRow.raw_event?.isComment;
           const matchedPageName = newRow.raw_event?.pageName || 
             (newRow.page_id === REAL_GOOD_VIBES_PAGE_ID ? 'Good Vibes' :
              newRow.page_id === REAL_TAASEEGUN_PAGE_ID ? 'ทาสีกัน' :
@@ -254,6 +260,7 @@ export default function UnifiedChatCenter({
           setLeads((prev) => {
             const updated = prev.map((lead) => {
               const isMatch = (lead.customerPsid && lead.customerPsid === newRow.sender_psid) ||
+                (lead.commentId && newRow.raw_event?.commentId && lead.commentId === newRow.raw_event.commentId) ||
                 (lead.id && lead.id.includes(newRow.sender_psid)) ||
                 (lead.name && newRow.sender_name && lead.name === newRow.sender_name);
 
@@ -269,6 +276,10 @@ export default function UnifiedChatCenter({
                   date: `${dateStr} ${timeStr}`,
                   status: 'ทักใหม่ (New)',
                   customerPsid: newRow.sender_psid,
+                  commentId: newRow.raw_event?.commentId || lead.commentId,
+                  postId: newRow.raw_event?.postId || lead.postId,
+                  sourceType: isCommentEvent ? 'post_comment' : lead.sourceType,
+                  sourceTitle: isCommentEvent ? (newRow.raw_event?.postTitle || 'คอมเมนต์ใต้โพสต์') : lead.sourceTitle,
                   messages: [...existingMsgs, newIncomingMessage]
                 };
               }
@@ -277,26 +288,32 @@ export default function UnifiedChatCenter({
 
             if (!isFound) {
               const brandNewLead = {
-                id: `fb-live-${newRow.sender_psid}`,
-                name: newRow.sender_name || `ลูกค้าใหม่ Facebook #${newRow.sender_psid.slice(-4)}`,
+                id: isCommentEvent ? `fb-comment-${newRow.raw_event?.commentId || Date.now()}` : `fb-live-${newRow.sender_psid}`,
+                name: newRow.sender_name || (isCommentEvent ? 'ลูกค้าใต้โพสต์' : `ลูกค้าใหม่ Facebook #${newRow.sender_psid.slice(-4)}`),
                 platform: 'facebook',
                 channel: newRow.page_id,
                 channelName: matchedPageName,
-                sourceType: 'inbox',
-                sourceTitle: 'Messenger Inbox (Live 1s)',
-                sourceLink: `https://www.facebook.com/${newRow.page_id}/inbox/`,
-                contact: 'Facebook Messenger',
+                sourceType: isCommentEvent ? 'post_comment' : 'inbox',
+                sourceTitle: isCommentEvent ? (newRow.raw_event?.postTitle || 'คอมเมนต์ใต้โพสต์') : 'Messenger Inbox (Live 1s)',
+                sourceLink: isCommentEvent 
+                  ? `https://www.facebook.com/${newRow.raw_event?.postId || newRow.page_id}` 
+                  : `https://www.facebook.com/${newRow.page_id}/inbox/`,
+                contact: isCommentEvent ? 'คอมเมนต์ใต้โพสต์ Facebook' : 'Facebook Messenger',
                 inquiry: newRow.message_text,
                 dealValue: 0,
                 status: 'ทักใหม่ (New)',
                 date: `${dateStr} ${timeStr}`,
                 followUpDate: null,
                 admin: 'แอดมินเพจ',
-                notes: `ทักสดผ่าน Webhook จากเพจ ${matchedPageName}`,
+                notes: isCommentEvent 
+                  ? `คอมเมนต์สดใต้โพสต์ (${newRow.raw_event?.commentId || ''}) เพจ ${matchedPageName}`
+                  : `ทักสดผ่าน Webhook จากเพจ ${matchedPageName}`,
                 isLiveFacebookLead: true,
                 unreadCount: 1,
-                tag: 'ลูกค้าใหม่สดๆ 1 วิ',
+                tag: isCommentEvent ? '📝 คอมเมนต์ใต้โพสต์' : '⚡ ลูกค้าใหม่สดๆ 1 วิ',
                 customerPsid: newRow.sender_psid,
+                commentId: newRow.raw_event?.commentId || null,
+                postId: newRow.raw_event?.postId || null,
                 messages: [newIncomingMessage]
               };
               return [brandNewLead, ...updated];
@@ -309,7 +326,9 @@ export default function UnifiedChatCenter({
             playNotificationSound();
           }
 
-          setToastNotification(`⚡ [สด 1 วินาที] ข้อความใหม่จาก "${newRow.sender_name || 'ลูกค้า'}" (${matchedPageName}): "${newRow.message_text}"`);
+          setToastNotification(isCommentEvent
+            ? `💬 [คอมเมนต์สดใต้โพสต์] จาก "${newRow.sender_name}" (${matchedPageName}): "${newRow.message_text}"`
+            : `⚡ [สด 1 วินาที] ข้อความใหม่จาก "${newRow.sender_name || 'ลูกค้า'}" (${matchedPageName}): "${newRow.message_text}"`);
           setTimeout(() => setToastNotification(null), 6000);
         }
       )
@@ -405,24 +424,35 @@ export default function UnifiedChatCenter({
     setLeads(updatedLeads);
     setReplyText('');
 
-    // If real live Facebook lead with customerPsid, attempt real API message delivery
-    if (activeLead.customerPsid && replyMode === 'inbox') {
-      const pageToken = activeLead.activePageToken || 
-        (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
-         activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
-         activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
-         activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
+    // If real live Facebook lead, attempt real API message/comment delivery
+    const pageToken = activeLead.activePageToken || 
+      (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
+       activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
+       activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
+       activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
 
-      if (pageToken) {
-        try {
+    if (pageToken) {
+      try {
+        if (activeLead.sourceType === 'post_comment' && activeLead.commentId) {
+          if (replyMode === 'comment') {
+            // 1. Reply publicly under the Facebook Post Comment
+            await replyToFacebookComment(pageToken, activeLead.commentId, messageTextToSend);
+            setToastNotification(`✅ ตอบกลับใต้คอมเมนต์ของ "${activeLead.name}" หน้าเพจสำเร็จแล้ว!`);
+          } else {
+            // 2. Reply privately into customer's Messenger Inbox from the comment
+            await sendFacebookPrivateReply(pageToken, activeLead.commentId, messageTextToSend);
+            setToastNotification(`✅ ส่งข้อความส่วนตัวเข้า Inbox ของ "${activeLead.name}" สำเร็จ!`);
+          }
+        } else if (activeLead.customerPsid && replyMode === 'inbox') {
+          // 3. Regular Messenger Inbox reply
           await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
-          setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ ${activeLead.name} สำเร็จ!`);
-          setTimeout(() => setToastNotification(null), 5000);
-        } catch (sendErr) {
-          console.warn('Facebook Messenger send warning:', sendErr);
-          setToastNotification(`บันทึกในระบบแล้ว (หมายเหตุ Facebook API: ${sendErr.message || 'ลูกค้าทักมาเกิน 24 ชม.'})`);
-          setTimeout(() => setToastNotification(null), 6000);
+          setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
         }
+        setTimeout(() => setToastNotification(null), 5000);
+      } catch (sendErr) {
+        console.warn('Facebook reply warning:', sendErr);
+        setToastNotification(`บันทึกในระบบแล้ว (หมายเหตุ Facebook: ${sendErr.message || 'ลูกค้าทักมาเกิน 24 ชม.'})`);
+        setTimeout(() => setToastNotification(null), 6000);
       }
     }
   };

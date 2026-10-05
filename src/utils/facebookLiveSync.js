@@ -127,3 +127,52 @@ export async function sendFacebookMessengerReply(pageToken, recipientPsid, messa
     throw err;
   }
 }
+
+// 1. Reply publicly under a post comment
+export async function replyToFacebookComment(pageToken, commentId, messageText) {
+  try {
+    const url = `https://graph.facebook.com/v19.0/${commentId}/comments?access_token=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: messageText
+      })
+    });
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.error.message || 'ไม่สามารถตอบใต้คอมเมนต์ผ่าน Facebook API ได้');
+    }
+    return data;
+  } catch (err) {
+    console.error('Error replying to Facebook comment:', err);
+    throw err;
+  }
+}
+
+// 2. Reply privately into customer's Messenger Inbox from a post comment
+export async function sendFacebookPrivateReply(pageToken, commentId, messageText) {
+  try {
+    const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text: messageText }
+      })
+    });
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.error.message || 'ไม่สามารถส่งข้อความส่วนตัวเข้า Inbox จากคอมเมนต์ได้');
+    }
+    return data;
+  } catch (err) {
+    console.error('Error sending private reply to comment:', err);
+    throw err;
+  }
+}
