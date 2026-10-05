@@ -60,6 +60,7 @@ import {
   sendFacebookPrivateReply,
   normalizeAttachment
 } from '../utils/facebookLiveSync';
+import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
 import SavedRepliesModal from './SavedRepliesModal';
 
