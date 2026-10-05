@@ -9,7 +9,8 @@ import {
   MessageSquare,
   SlidersHorizontal,
   X,
-  LogOut
+  LogOut,
+  Kanban
 } from 'lucide-react';
 
 export default function Header({ 
@@ -453,6 +454,32 @@ export default function Header({
             fontWeight: '800'
           }}>
             Live
+          </span>
+        </button>
+
+        {/* Tab: Sales Pipeline (Kanban) */}
+        <button
+          onClick={() => setActiveTab('pipeline')}
+          className="header-nav-btn"
+          style={{
+            backgroundColor: activeTab === 'pipeline' ? '#7c3aed' : 'transparent',
+            color: activeTab === 'pipeline' ? '#ffffff' : '#475569',
+            boxShadow: activeTab === 'pipeline' ? '0 3px 10px rgba(124, 58, 237, 0.25)' : 'none',
+            border: activeTab === 'pipeline' ? 'none' : '1px solid #e2e8f0',
+            fontWeight: activeTab === 'pipeline' ? '700' : '600'
+          }}
+        >
+          <Kanban size={16} />
+          <span>ไปป์ไลน์ (Kanban)</span>
+          <span style={{
+            background: activeTab === 'pipeline' ? '#ffffff' : '#ede9fe',
+            color: activeTab === 'pipeline' ? '#7c3aed' : '#6d28d9',
+            padding: '1px 6px',
+            borderRadius: '999px',
+            fontSize: '0.68rem',
+            fontWeight: '800'
+          }}>
+            ขาย
           </span>
         </button>
 

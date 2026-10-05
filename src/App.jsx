@@ -4,6 +4,7 @@ import MediaKitAnalytics from './components/MediaKitAnalytics';
 import LeadManagementCrm from './components/LeadManagementCrm';
 import UnifiedChatCenter from './components/UnifiedChatCenter';
 import ApiIntegrationGuide from './components/ApiIntegrationGuide';
+import SalesPipelineKanban from './components/SalesPipelineKanban';
 import AddLeadModal from './components/AddLeadModal';
 import TeamManagementModal from './components/TeamManagementModal';
 import LoginScreen, { teamAccounts as defaultTeamAccounts } from './components/LoginScreen';
@@ -233,7 +234,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${activeTab === 'chat' ? 'chat-mode' : ''}`}>
+    <div className={`app-container ${activeTab === 'chat' || activeTab === 'pipeline' ? 'chat-mode' : ''}`}>
       {/* Global Header & Navigation */}
       <Header
         activeTab={activeTab}
@@ -259,6 +260,16 @@ export default function App() {
             selectedLeadId={selectedLeadId}
             setSelectedLeadId={setSelectedLeadId}
             currentUser={currentUser}
+          />
+        )}
+
+        {activeTab === 'pipeline' && (
+          <SalesPipelineKanban
+            leads={leads}
+            setLeads={setLeads}
+            facebookPages={facebookPages}
+            onOpenChat={handleOpenChat}
+            onOpenAddLeadModal={() => setIsAddLeadModalOpen(true)}
           />
         )}
 

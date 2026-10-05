@@ -61,6 +61,7 @@ import {
   normalizeAttachment
 } from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
+import PortfolioCatalogModal from './PortfolioCatalogModal';
 
 export function getPageTheme(channelId) {
   if (channelId === REAL_TAASEEGUN_PAGE_ID) {
@@ -266,6 +267,48 @@ export default function UnifiedChatCenter({
     });
     setToastNotification(isImg ? '📷 วางรูปภาพเรียบร้อยแล้ว พร้อมส่ง!' : '📎 วางไฟล์เรียบร้อยแล้ว!');
     setTimeout(() => setToastNotification(null), 3500);
+  };
+
+  // Portfolio & Texture Catalog Modal State
+  const [isPortfolioCatalogOpen, setIsPortfolioCatalogOpen] = useState(false);
+
+  // Fast One-Click Send from Portfolio Catalog
+  const handleSelectCatalogPhoto = async (item) => {
+    try {
+      setToastNotification(`กำลังแนบรูปตัวอย่าง "${item.title}"...`);
+      // Convert external image to Blob File so it can be sent via Meta Send API
+      const res = await fetch(item.imageUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `${item.title.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`, { type: blob.type || 'image/jpeg' });
+      setSelectedAttachment({
+        file,
+        name: `${item.title}.jpg`,
+        size: file.size,
+        type: 'image',
+        previewUrl: URL.createObjectURL(file)
+      });
+      setReplyText(`🎨 ตัวอย่างผลงาน: ${item.title}\n💰 ราคาประเมิน: ${item.priceEstimate}\n📌 รายละเอียด: ${item.description}`);
+      setToastNotification(`🎨 แนบรูปตัวอย่าง "${item.title}" เรียบร้อย กดส่งข้อความได้เลยครับ!`);
+      setTimeout(() => setToastNotification(null), 4000);
+    } catch (err) {
+      console.warn('Direct fetch failed, falling back to direct URL attachment:', err);
+      setSelectedAttachment({
+        file: null,
+        name: `${item.title}.jpg`,
+        size: 150000,
+        type: 'image',
+        previewUrl: item.imageUrl
+      });
+      setReplyText(`🎨 ตัวอย่างผลงาน: ${item.title}\n💰 ราคาประเมิน: ${item.priceEstimate}\n📌 รายละเอียด: ${item.description}`);
+      setToastNotification(`🎨 แนบรูปตัวอย่าง "${item.title}" เรียบร้อย!`);
+      setTimeout(() => setToastNotification(null), 3000);
+    }
+  };
+
+  const handleInsertCatalogDescription = (text) => {
+    setReplyText(prev => prev ? `${prev}\n\n${text}` : text);
+    setToastNotification('📝 นำข้อความรายละเอียดใส่ลงในช่องแชทเรียบร้อย');
+    setTimeout(() => setToastNotification(null), 2500);
   };
 
   const handleRemoveAttachment = () => {
@@ -1935,6 +1978,31 @@ export default function UnifiedChatCenter({
                   {isAiGenerating ? 'กำลังร่าง...' : '✨ AI ร่างคำตอบให้อัตโนมัติ'}
                 </button>
 
+                {/* Quick Portfolio & Color Catalog Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsPortfolioCatalogOpen(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '4px 11px',
+                    borderRadius: '999px',
+                    backgroundColor: '#0284c7',
+                    color: '#ffffff',
+                    fontSize: '0.74rem',
+                    fontWeight: '700',
+                    border: 'none',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)',
+                    cursor: 'pointer'
+                  }}
+                  title="เปิดคลังรูปตัวอย่างสีเทกเจอร์ ผลงานทาสีบ้านและคอนโด เพื่อส่งให้ลูกค้าทันที"
+                >
+                  <ImageIcon size={13} />
+                  <span>🎨 คลังผลงานด่วน (Catalog)</span>
+                </button>
+
                 <span style={{ color: '#cbd5e1' }}>|</span>
 
                 {quickReplyTemplates.map(qr => (
@@ -2141,6 +2209,33 @@ export default function UnifiedChatCenter({
                   >
                     <Paperclip size={17} />
                     {!isMobile && <span>เอกสาร/PDF</span>}
+                  </button>
+
+                  {/* 3. CATALOG BUTTON IN COMPOSER */}
+                  <button
+                    type="button"
+                    onClick={() => setIsPortfolioCatalogOpen(true)}
+                    style={{
+                      padding: isMobile ? '0 9px' : '0 12px',
+                      height: '52px',
+                      borderRadius: '10px',
+                      border: '1.5px solid #a855f7',
+                      backgroundColor: '#faf5ff',
+                      color: '#7e22ce',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      fontSize: '0.82rem',
+                      fontWeight: '700',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="เปิดคลังรูปตัวอย่างสีเทกเจอร์และผลงานทาสีเพื่อส่งให้ลูกค้า"
+                  >
+                    <ImageIcon size={17} />
+                    {!isMobile && <span>คลังผลงาน</span>}
                   </button>
 
                   {/* Textarea with Paste (Ctrl+V) & Drag-Drop support */}
@@ -2580,6 +2675,15 @@ export default function UnifiedChatCenter({
           </div>
         </div>
       )}
+
+      {/* Portfolio & Texture Color Catalog Modal */}
+      <PortfolioCatalogModal
+        isOpen={isPortfolioCatalogOpen}
+        onClose={() => setIsPortfolioCatalogOpen(false)}
+        onSelectPhotoToSend={handleSelectCatalogPhoto}
+        onInsertDescription={handleInsertCatalogDescription}
+        activeLead={activeLead}
+      />
     </div>
   );
 }
