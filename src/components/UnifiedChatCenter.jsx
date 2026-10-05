@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, 
   Search, 
+  ArrowLeft,
   MessageSquare, 
   FileText, 
   Video, 
@@ -147,6 +148,17 @@ export default function UnifiedChatCenter({
   const [toastNotification, setToastNotification] = useState(null);
   const [isSyncingFb, setIsSyncingFb] = useState(false);
   const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window !== 'undefined') return window.innerWidth < 900;
+    return false;
+  });
+  const [mobileTab, setMobileTab] = useState('list'); // 'list' | 'chat' | 'profile'
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 900);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Sync real live conversations from Meta Graph API for all connected pages
   const handleSyncRealFacebook = async (silent = false) => {
@@ -698,19 +710,22 @@ export default function UnifiedChatCenter({
       )}
 
       {/* Top Controls Bar for Live Chat Center */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '12px',
-        padding: '6px 14px',
-        marginBottom: '8px',
-        flexWrap: 'wrap',
-        gap: '8px',
-        flexShrink: 0
-      }}>
+      <div 
+        className={isMobile && mobileTab !== 'list' ? 'mobile-hide' : ''}
+        style={{
+          display: (isMobile && mobileTab !== 'list') ? 'none' : 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '12px',
+          padding: '6px 14px',
+          marginBottom: '8px',
+          flexWrap: 'wrap',
+          gap: '8px',
+          flexShrink: 0
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="live-dot"></span> Live Inbox Active
@@ -856,30 +871,38 @@ export default function UnifiedChatCenter({
       </div>
 
       {/* Main 3-Column Chat Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '330px 1fr 290px',
-        flex: 1,
-        minHeight: 0,
-        height: '100%',
-        backgroundColor: '#ffffff',
-        borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)'
-      }}>
+      <div 
+        className="chat-grid-container"
+        style={{
+          display: isMobile ? 'flex' : 'grid',
+          gridTemplateColumns: isMobile ? 'none' : '330px 1fr 290px',
+          flexDirection: isMobile ? 'column' : 'initial',
+          flex: 1,
+          minHeight: 0,
+          height: '100%',
+          backgroundColor: '#ffffff',
+          borderRadius: '16px',
+          border: '1px solid #e2e8f0',
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-md)'
+        }}
+      >
         {/* ============================================================== */}
         {/* 1. LEFT PANE: CONVERSATION LIST                                 */}
         {/* ============================================================== */}
-        <div style={{
-          borderRight: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: '#f8fafc',
-          height: '100%',
-          minHeight: 0,
-          overflow: 'hidden'
-        }}>
+        <div 
+          className={`chat-pane-left ${isMobile && mobileTab !== 'list' ? 'mobile-hide' : 'mobile-show'}`}
+          style={{
+            borderRight: isMobile ? 'none' : '1px solid #e2e8f0',
+            display: (isMobile && mobileTab !== 'list') ? 'none' : 'flex',
+            flexDirection: 'column',
+            backgroundColor: '#f8fafc',
+            height: '100%',
+            width: isMobile ? '100%' : 'auto',
+            minHeight: 0,
+            overflow: 'hidden'
+          }}
+        >
           {/* Header & Filters */}
           <div style={{ padding: '12px 14px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -899,7 +922,16 @@ export default function UnifiedChatCenter({
             </div>
 
             {/* Page Filter Tabs (5 buttons with clean wrap) */}
-            <div style={{ display: 'flex', gap: '3px', marginBottom: '8px', flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex',
+              gap: '4px',
+              marginBottom: '8px',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              paddingBottom: '2px',
+              flexShrink: 0
+            }}>
               <button
                 onClick={() => setFilterChannel('all')}
                 style={{
@@ -1094,7 +1126,10 @@ export default function UnifiedChatCenter({
                 return (
                   <div
                     key={lead.id}
-                    onClick={() => setSelectedLeadId(lead.id)}
+                    onClick={() => {
+                      setSelectedLeadId(lead.id);
+                      if (isMobile) setMobileTab('chat');
+                    }}
                     style={{
                       padding: '11px 13px',
                       margin: '4px 6px',
@@ -1197,93 +1232,149 @@ export default function UnifiedChatCenter({
         {/* ============================================================== */}
         {/* 2. MIDDLE PANE: LIVE CHAT & REPLY STREAM                        */}
         {/* ============================================================== */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: '#ffffff',
-          height: '100%',
-          minHeight: 0,
-          overflow: 'hidden'
-        }}>
+        <div 
+          className={`chat-pane-center ${isMobile && mobileTab !== 'chat' ? 'mobile-hide' : 'mobile-show'}`}
+          style={{
+            display: (isMobile && mobileTab !== 'chat') ? 'none' : 'flex',
+            flexDirection: 'column',
+            backgroundColor: '#ffffff',
+            height: '100%',
+            width: isMobile ? '100%' : 'auto',
+            minHeight: 0,
+            overflow: 'hidden'
+          }}
+        >
           {activeLead ? (
             <>
               {/* Active Chat Header */}
               <div style={{
-                padding: '12px 18px',
+                padding: '10px 14px',
                 borderBottom: `2px solid ${activeTheme.cardBorder}`,
                 borderTop: `3px solid ${activeTheme.primary}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 backgroundColor: activeTheme.bg,
-                flexShrink: 0
+                flexShrink: 0,
+                gap: '8px'
               }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#0f172a' }}>
-                      {activeLead.name}
-                    </h3>
-                    <span style={{
-                      fontSize: '0.72rem',
-                      padding: '3px 8px',
-                      borderRadius: '6px',
-                      backgroundColor: activeTheme.badgeBg,
-                      color: activeTheme.badgeText,
-                      fontWeight: '800',
-                      border: `1px solid ${activeTheme.badgeBorder}`,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      {activeTheme.icon} {activeLead.channelName || activeTheme.name}
-                    </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                  {isMobile && (
+                    <button
+                      onClick={() => setMobileTab('list')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        backgroundColor: '#ffffff',
+                        border: `1.5px solid ${activeTheme.cardBorder}`,
+                        color: activeTheme.primary,
+                        fontSize: '0.78rem',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
+                      }}
+                    >
+                      <ArrowLeft size={16} /> แชท
+                    </button>
+                  )}
 
-                    {/* AI Intent Badge */}
-                    {currentIntent && (
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '0.96rem', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {activeLead.name}
+                      </h3>
                       <span style={{
-                        fontSize: '0.7rem',
-                        fontWeight: '700',
-                        color: currentIntent.badgeColor,
-                        backgroundColor: `${currentIntent.badgeColor}15`,
-                        padding: '2px 8px',
-                        borderRadius: '999px',
-                        border: `1px solid ${currentIntent.badgeColor}30`
+                        fontSize: '0.68rem',
+                        padding: '2px 7px',
+                        borderRadius: '6px',
+                        backgroundColor: activeTheme.badgeBg,
+                        color: activeTheme.badgeText,
+                        fontWeight: '800',
+                        border: `1px solid ${activeTheme.badgeBorder}`,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        whiteSpace: 'nowrap'
                       }}>
-                        {currentIntent.label}
+                        {activeTheme.icon} {activeTheme.shortName}
                       </span>
-                    )}
-                  </div>
 
-                  {activeLead.sourceTitle && (
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                      <span>{renderSourceTypeBadge(activeLead.sourceType)}:</span>
-                      <strong style={{ color: '#334155' }}>{activeLead.sourceTitle}</strong>
-                      {activeLead.sourceLink && (
-                        <a href={activeLead.sourceLink} target="_blank" rel="noreferrer" style={{ color: '#3b82f6' }}>
-                          <ExternalLink size={12} />
-                        </a>
+                      {/* AI Intent Badge */}
+                      {currentIntent && (
+                        <span style={{
+                          fontSize: '0.66rem',
+                          fontWeight: '700',
+                          color: currentIntent.badgeColor,
+                          backgroundColor: `${currentIntent.badgeColor}15`,
+                          padding: '1px 6px',
+                          borderRadius: '999px',
+                          border: `1px solid ${currentIntent.badgeColor}30`,
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {currentIntent.label}
+                        </span>
                       )}
                     </div>
-                  )}
+
+                    {activeLead.sourceTitle && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span>{renderSourceTypeBadge(activeLead.sourceType)}:</span>
+                        <strong style={{ color: '#334155' }}>{activeLead.sourceTitle}</strong>
+                        {activeLead.sourceLink && (
+                          <a href={activeLead.sourceLink} target="_blank" rel="noreferrer" style={{ color: '#3b82f6' }}>
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                   <select
                     value={activeLead.status}
                     onChange={(e) => handleUpdateLeadField('status', e.target.value)}
                     style={{
-                      padding: '5px 8px',
+                      padding: '4px 6px',
                       borderRadius: '6px',
-                      fontSize: '0.76rem',
+                      fontSize: '0.74rem',
                       fontWeight: '700',
                       border: '1px solid #cbd5e1',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      maxWidth: isMobile ? '95px' : 'auto'
                     }}
                   >
                     {leadStatusOptions.filter(o => o.value !== 'all').map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
+
+                  {isMobile && (
+                    <button
+                      onClick={() => setMobileTab('profile')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '5px 8px',
+                        borderRadius: '6px',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        color: '#334155',
+                        fontSize: '0.74rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title="ดูข้อมูลลูกค้าและดีล"
+                    >
+                      <User size={13} /> ข้อมูล
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1585,18 +1676,43 @@ export default function UnifiedChatCenter({
         {/* ============================================================== */}
         {/* 3. RIGHT PANE: CRM PROFILE & FOLLOW-UP REMINDER                 */}
         {/* ============================================================== */}
-        <div className="scrollable-pane" style={{
-          borderLeft: '1px solid #e2e8f0',
-          backgroundColor: '#ffffff',
-          padding: '16px 14px',
-          height: '100%',
-          minHeight: 0,
-          overflowY: 'auto',
-          overscrollBehavior: 'contain',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px'
-        }}>
+        <div 
+          className={`scrollable-pane chat-pane-right ${isMobile && mobileTab !== 'profile' ? 'mobile-hide' : 'mobile-show'}`}
+          style={{
+            borderLeft: isMobile ? 'none' : '1px solid #e2e8f0',
+            backgroundColor: '#ffffff',
+            padding: '14px',
+            height: '100%',
+            width: isMobile ? '100%' : 'auto',
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            display: (isMobile && mobileTab !== 'profile') ? 'none' : 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}
+        >
+          {isMobile && (
+            <button
+              onClick={() => setMobileTab('chat')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#1d4ed8',
+                fontSize: '0.82rem',
+                fontWeight: '800',
+                cursor: 'pointer',
+                marginBottom: '2px'
+              }}
+            >
+              <ArrowLeft size={16} /> กลับไปที่หน้าต่างแชท
+            </button>
+          )}
           {activeLead ? (
             <>
               {/* Follow-up Reminder Module */}

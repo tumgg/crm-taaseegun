@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart3, 
   Users, 
   Settings2, 
   PlusCircle, 
   Download, 
-  ExternalLink, 
-  Share2, 
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  SlidersHorizontal,
+  X,
+  LogOut
 } from 'lucide-react';
 
 export default function Header({ 
@@ -24,11 +25,13 @@ export default function Header({
   onOpenTeamModal,
   teamMembersCount = 3
 }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
     <header style={{
-      marginBottom: activeTab === 'chat' ? '8px' : '16px',
+      marginBottom: activeTab === 'chat' ? '6px' : '16px',
       borderBottom: '1px solid var(--border-subtle)',
-      paddingBottom: activeTab === 'chat' ? '8px' : '12px',
+      paddingBottom: activeTab === 'chat' ? '6px' : '12px',
       flexShrink: 0
     }}>
       {/* Top Bar */}
@@ -37,38 +40,39 @@ export default function Header({
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '12px',
-        marginBottom: activeTab === 'chat' ? '8px' : '12px'
+        gap: '8px',
+        marginBottom: activeTab === 'chat' ? '6px' : '10px'
       }}>
         {/* Brand identity */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
             background: 'linear-gradient(135deg, #1877f2 0%, #7c3aed 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#fff',
-            boxShadow: '0 4px 12px rgba(24, 119, 242, 0.3)'
+            boxShadow: '0 3px 10px rgba(24, 119, 242, 0.3)',
+            flexShrink: 0
           }}>
-            <Sparkles size={24} />
+            <Sparkles size={20} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '1.45rem', fontWeight: '800', letterSpacing: '-0.02em', color: '#0f172a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <h1 className="header-brand-title" style={{ fontSize: '1.35rem', fontWeight: '800', letterSpacing: '-0.02em', color: '#0f172a' }}>
                 OmniSocial & Lead Hub
               </h1>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
-                padding: '2px 9px',
+                gap: '4px',
+                padding: '1px 7px',
                 background: '#eff6ff',
                 color: '#1d4ed8',
-                borderRadius: '8px',
-                fontSize: '0.78rem',
+                borderRadius: '6px',
+                fontSize: '0.72rem',
                 fontWeight: '700',
                 border: '1px solid #bfdbfe'
               }}>
@@ -77,12 +81,12 @@ export default function Header({
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '2px 8px',
+                gap: '5px',
+                padding: '1px 6px',
                 background: '#ecfdf5',
                 color: '#059669',
                 borderRadius: '999px',
-                fontSize: '0.72rem',
+                fontSize: '0.68rem',
                 fontWeight: '600',
                 border: '1px solid #a7f3d0'
               }}>
@@ -90,33 +94,31 @@ export default function Header({
               </span>
             </div>
             {activeTab !== 'chat' && (
-              <p style={{ fontSize: '0.84rem', color: '#64748b', marginTop: '2px' }}>
+              <p className="header-brand-sub" style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '1px' }}>
                 ระบบศูนย์กลางตอบแชทและบริหารจัดการลูกค้าโซเชียลมีเดียหลายเพจสำหรับทีมงาน
               </p>
             )}
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {/* Action Controls - Desktop View */}
+        <div className="header-action-desktop">
           <button
             onClick={onOpenAddLeadModal}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '6px',
               backgroundColor: '#1877f2',
               color: '#ffffff',
-              padding: '9px 16px',
-              borderRadius: '10px',
+              padding: '8px 14px',
+              borderRadius: '9px',
               fontWeight: '600',
-              fontSize: '0.85rem',
-              boxShadow: '0 2px 8px rgba(24, 119, 242, 0.25)'
+              fontSize: '0.84rem',
+              boxShadow: '0 2px 6px rgba(24, 119, 242, 0.25)'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1565d8'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1877f2'}
           >
-            <PlusCircle size={16} />
+            <PlusCircle size={15} />
             + บันทึก Lead ลูกค้าใหม่
           </button>
 
@@ -125,20 +127,17 @@ export default function Header({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               backgroundColor: '#ffffff',
               color: '#334155',
-              padding: '9px 13px',
-              borderRadius: '10px',
+              padding: '8px 12px',
+              borderRadius: '9px',
               fontWeight: '600',
-              fontSize: '0.85rem',
-              border: '1px solid #cbd5e1',
-              boxShadow: 'var(--shadow-sm)'
+              fontSize: '0.84rem',
+              border: '1px solid #cbd5e1'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
           >
-            <Download size={15} />
+            <Download size={14} />
             ส่งออก CSV
           </button>
 
@@ -147,13 +146,13 @@ export default function Header({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               backgroundColor: '#ffffff',
               color: '#475569',
-              padding: '9px 12px',
-              borderRadius: '10px',
+              padding: '8px 11px',
+              borderRadius: '9px',
               fontWeight: '600',
-              fontSize: '0.85rem',
+              fontSize: '0.84rem',
               border: '1px solid #e2e8f0'
             }}
             title="ดาวน์โหลดไฟล์สำรองข้อมูลทั้งหมดเป็น JSON"
@@ -166,13 +165,13 @@ export default function Header({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               backgroundColor: '#ffffff',
               color: '#64748b',
-              padding: '9px 10px',
-              borderRadius: '10px',
+              padding: '8px 9px',
+              borderRadius: '9px',
               fontWeight: '600',
-              fontSize: '0.82rem',
+              fontSize: '0.8rem',
               border: '1px solid #e2e8f0'
             }}
             title="รีเซ็ตกลับเป็นข้อมูลตัวอย่างเริ่มต้น"
@@ -185,19 +184,19 @@ export default function Header({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               backgroundColor: '#eff6ff',
               color: '#1d4ed8',
-              padding: '9px 13px',
-              borderRadius: '10px',
+              padding: '8px 12px',
+              borderRadius: '9px',
               fontWeight: '700',
-              fontSize: '0.85rem',
+              fontSize: '0.84rem',
               border: '1px solid #bfdbfe',
               cursor: 'pointer'
             }}
-            title="จัดการรายชื่อและรหัสผ่านทีมงานแอดมิน (crm.taaseegun.com)"
+            title="จัดการรายชื่อและรหัสผ่านทีมงานแอดมิน"
           >
-            <Users size={16} />
+            <Users size={15} />
             จัดการทีมงาน ({teamMembersCount})
           </button>
 
@@ -206,22 +205,22 @@ export default function Header({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '8px',
               backgroundColor: '#f8fafc',
               border: '1px solid #cbd5e1',
-              padding: '5px 12px 5px 6px',
-              borderRadius: '12px'
+              padding: '4px 10px 4px 6px',
+              borderRadius: '10px'
             }}>
               <img
                 src={currentUser.avatar}
                 alt={currentUser.name}
-                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
               />
               <div style={{ textAlign: 'left', lineHeight: '1.2' }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#0f172a' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#0f172a' }}>
                   {currentUser.name}
                 </div>
-                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                <div style={{ fontSize: '0.66rem', color: '#64748b' }}>
                   {currentUser.roleLabel || 'Admin'}
                 </div>
               </div>
@@ -229,14 +228,13 @@ export default function Header({
               <button
                 onClick={onLogout}
                 style={{
-                  marginLeft: '6px',
-                  padding: '5px 10px',
-                  borderRadius: '6px',
+                  padding: '3px 7px',
+                  borderRadius: '5px',
                   backgroundColor: '#fee2e2',
                   color: '#dc2626',
-                  fontSize: '0.74rem',
+                  fontSize: '0.68rem',
                   fontWeight: '700',
-                  border: '1px solid #fecaca'
+                  marginLeft: '4px'
                 }}
                 title="ออกจากระบบ"
               >
@@ -245,71 +243,239 @@ export default function Header({
             </div>
           )}
         </div>
+
+        {/* Action Controls - Mobile View */}
+        <div className="header-action-mobile">
+          <button
+            onClick={onOpenAddLeadModal}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#1877f2',
+              color: '#ffffff',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              fontWeight: '700',
+              fontSize: '0.78rem',
+              boxShadow: '0 2px 6px rgba(24, 119, 242, 0.25)'
+            }}
+          >
+            <PlusCircle size={14} /> + Lead
+          </button>
+
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: isMobileMenuOpen ? '#0f172a' : '#f1f5f9',
+              color: isMobileMenuOpen ? '#ffffff' : '#334155',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              fontWeight: '700',
+              fontSize: '0.78rem',
+              border: '1px solid #cbd5e1'
+            }}
+          >
+            {isMobileMenuOpen ? <X size={15} /> : <SlidersHorizontal size={15} />}
+            <span>จัดการ</span>
+          </button>
+
+          {currentUser && (
+            <img
+              src={currentUser.avatar}
+              alt={currentUser.name}
+              title={currentUser.name}
+              onClick={() => setIsMobileMenuOpen(true)}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #cbd5e1', cursor: 'pointer' }}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Main Navigation Tabs */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        borderBottom: '2px solid transparent',
-        flexWrap: 'wrap'
-      }}>
+      {/* Mobile Drawer / Dropdown Menu for Management */}
+      {isMobileMenuOpen && (
+        <div style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          border: '1.5px solid #cbd5e1',
+          padding: '12px',
+          marginBottom: '8px',
+          boxShadow: 'var(--shadow-lg)'
+        }}>
+          {currentUser && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', marginBottom: '10px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+                <div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0f172a' }}>{currentUser.name}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{currentUser.roleLabel || 'Admin'}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onLogout();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  backgroundColor: '#fee2e2',
+                  color: '#dc2626',
+                  fontSize: '0.75rem',
+                  fontWeight: '700'
+                }}
+              >
+                <LogOut size={13} /> ออกจากระบบ
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                onExportCsv();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px',
+                borderRadius: '8px',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.78rem',
+                fontWeight: '600',
+                color: '#334155'
+              }}
+            >
+              <Download size={14} /> ส่งออก CSV
+            </button>
+
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                onExportBackup();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px',
+                borderRadius: '8px',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.78rem',
+                fontWeight: '600',
+                color: '#334155'
+              }}
+            >
+              💾 สำรอง JSON
+            </button>
+
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                onOpenTeamModal();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px',
+                borderRadius: '8px',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                fontSize: '0.78rem',
+                fontWeight: '700',
+                color: '#1d4ed8'
+              }}
+            >
+              <Users size={14} /> ทีมงาน ({teamMembersCount})
+            </button>
+
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                onResetData();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px',
+                borderRadius: '8px',
+                backgroundColor: '#fff1f2',
+                border: '1px solid #fecdd3',
+                fontSize: '0.78rem',
+                fontWeight: '600',
+                color: '#e11d48'
+              }}
+            >
+              🔄 รีเซ็ตข้อมูล
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Navigation Tabs - Horizontally scrollable row on mobile */}
+      <div className="header-nav-container">
         {/* Tab 1: Live Chat Center */}
         <button
           onClick={() => setActiveTab('chat')}
+          className="header-nav-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            borderRadius: '10px',
-            fontWeight: activeTab === 'chat' ? '700' : '600',
-            fontSize: '0.92rem',
             backgroundColor: activeTab === 'chat' ? '#1877f2' : 'transparent',
             color: activeTab === 'chat' ? '#ffffff' : '#1e293b',
-            boxShadow: activeTab === 'chat' ? '0 4px 12px rgba(24, 119, 242, 0.25)' : 'none',
-            border: activeTab === 'chat' ? 'none' : '1px solid #e2e8f0'
+            boxShadow: activeTab === 'chat' ? '0 3px 10px rgba(24, 119, 242, 0.25)' : 'none',
+            border: activeTab === 'chat' ? 'none' : '1px solid #e2e8f0',
+            fontWeight: activeTab === 'chat' ? '700' : '600'
           }}
         >
-          <MessageSquare size={18} />
-          💬 ศูนย์ตอบแชท & คอมเมนต์ (Live Inbox)
+          <MessageSquare size={16} />
+          <span>แชทสด & คอมเมนต์</span>
           <span style={{
             background: activeTab === 'chat' ? '#ffffff' : '#ef4444',
             color: activeTab === 'chat' ? '#1877f2' : '#ffffff',
-            padding: '2px 7px',
+            padding: '1px 6px',
             borderRadius: '999px',
-            fontSize: '0.72rem',
+            fontSize: '0.68rem',
             fontWeight: '800'
           }}>
-            ตอบได้ในนี้
+            Live
           </span>
         </button>
 
         {/* Tab 2: CRM Leads Table */}
         <button
           onClick={() => setActiveTab('crm')}
+          className="header-nav-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            borderRadius: '10px',
-            fontWeight: activeTab === 'crm' ? '700' : '500',
-            fontSize: '0.92rem',
             backgroundColor: activeTab === 'crm' ? '#0f172a' : 'transparent',
             color: activeTab === 'crm' ? '#ffffff' : '#64748b',
-            boxShadow: activeTab === 'crm' ? '0 4px 10px rgba(15, 23, 42, 0.15)' : 'none'
+            boxShadow: activeTab === 'crm' ? '0 3px 8px rgba(15, 23, 42, 0.15)' : 'none',
+            border: activeTab === 'crm' ? 'none' : '1px solid #e2e8f0',
+            fontWeight: activeTab === 'crm' ? '700' : '500'
           }}
         >
-          <Users size={18} />
-          ตารางรวบรวมลูกค้า (CRM Leads)
+          <Users size={16} />
+          <span>ลูกค้า (CRM)</span>
           <span style={{
             background: activeTab === 'crm' ? '#3b82f6' : '#e2e8f0',
             color: activeTab === 'crm' ? '#ffffff' : '#475569',
-            padding: '2px 8px',
+            padding: '1px 6px',
             borderRadius: '999px',
-            fontSize: '0.75rem',
+            fontSize: '0.7rem',
             fontWeight: '700'
           }}>
             {totalLeadsCount}
@@ -319,41 +485,33 @@ export default function Header({
         {/* Tab 3: Media Kit Analytics */}
         <button
           onClick={() => setActiveTab('analytics')}
+          className="header-nav-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            borderRadius: '10px',
-            fontWeight: activeTab === 'analytics' ? '700' : '500',
-            fontSize: '0.92rem',
             backgroundColor: activeTab === 'analytics' ? '#0f172a' : 'transparent',
             color: activeTab === 'analytics' ? '#ffffff' : '#64748b',
-            boxShadow: activeTab === 'analytics' ? '0 4px 10px rgba(15, 23, 42, 0.15)' : 'none'
+            boxShadow: activeTab === 'analytics' ? '0 3px 8px rgba(15, 23, 42, 0.15)' : 'none',
+            border: activeTab === 'analytics' ? 'none' : '1px solid #e2e8f0',
+            fontWeight: activeTab === 'analytics' ? '700' : '500'
           }}
         >
-          <BarChart3 size={18} />
-          สถิติช่อง (Media Kit Analytics)
+          <BarChart3 size={16} />
+          <span>สถิติช่อง</span>
         </button>
 
         {/* Tab 4: API Setup */}
         <button
           onClick={() => setActiveTab('api-setup')}
+          className="header-nav-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            borderRadius: '10px',
-            fontWeight: activeTab === 'api-setup' ? '700' : '500',
-            fontSize: '0.92rem',
             backgroundColor: activeTab === 'api-setup' ? '#0f172a' : 'transparent',
             color: activeTab === 'api-setup' ? '#ffffff' : '#64748b',
-            boxShadow: activeTab === 'api-setup' ? '0 4px 10px rgba(15, 23, 42, 0.15)' : 'none'
+            boxShadow: activeTab === 'api-setup' ? '0 3px 8px rgba(15, 23, 42, 0.15)' : 'none',
+            border: activeTab === 'api-setup' ? 'none' : '1px solid #e2e8f0',
+            fontWeight: activeTab === 'api-setup' ? '700' : '500'
           }}
         >
-          <Settings2 size={18} />
-          วิธีเชื่อมต่อ API ส่งข้อความ & หลายเพจ
+          <Settings2 size={16} />
+          <span>ต่อ API 4 เพจ</span>
         </button>
       </div>
     </header>

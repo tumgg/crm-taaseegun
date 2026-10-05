@@ -156,6 +156,19 @@ a {
   padding: 8px 16px 10px 16px;
 }
 
+@media (max-width: 900px) {
+  .app-container {
+    padding: 6px 8px 16px 8px;
+  }
+  
+  .app-container.chat-mode {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    padding: 4px 6px 6px 6px;
+  }
+}
+
 .app-main-content {
   flex: 1;
   min-height: 0;
@@ -337,4 +350,89 @@ a {
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   border: 1px solid var(--border-subtle);
+}
+
+/* ============================================================== */
+/* Responsive Mobile Classes                                       */
+/* ============================================================== */
+.header-action-desktop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-action-mobile {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-nav-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.header-nav-container::-webkit-scrollbar {
+  display: none;
+}
+
+.header-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+@media (max-width: 900px) {
+  .header-action-desktop {
+    display: none !important;
+  }
+  .header-action-mobile {
+    display: flex !important;
+  }
+
+  .header-brand-title {
+    font-size: 1.15rem !important;
+  }
+
+  .header-brand-sub {
+    display: none !important;
+  }
+
+  .header-nav-btn {
+    padding: 7px 12px !important;
+    font-size: 0.8rem !important;
+    gap: 6px !important;
+  }
+
+  /* Chat Center Mobile styling */
+  .chat-grid-container {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .chat-pane-left.mobile-hide,
+  .chat-pane-center.mobile-hide,
+  .chat-pane-right.mobile-hide {
+    display: none !important;
+  }
+
+  .chat-pane-left.mobile-show,
+  .chat-pane-center.mobile-show,
+  .chat-pane-right.mobile-show {
+    display: flex !important;
+    width: 100% !important;
+    flex: 1 !important;
+  }
 }
