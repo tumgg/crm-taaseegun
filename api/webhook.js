@@ -115,6 +115,99 @@ export default async function handler(req, res) {
                 body: JSON.stringify(insertPayload)
               });
 
+              // Also sync directly into crm_leads for multi-admin real-time replication
+              try {
+                const leadId = `fb-live-${senderPsid}`;
+                const getLeadRes = await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
+                  headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`
+                  }
+                });
+                const existingRows = await getLeadRes.json();
+                const existingLead = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
+
+                const now = Date.now();
+                const nowIso = new Date(now).toISOString();
+                const nowThaiTime = new Date(now).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+                const nowThaiDate = new Date(now).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' });
+                const dateStr = `${nowThaiDate} ${nowThaiTime}`;
+
+                const newIncomingMessage = {
+                  id: mid,
+                  sender: senderName,
+                  text: text,
+                  time: nowThaiTime,
+                  timestamp: now,
+                  isCustomer: true,
+                  attachments: rawAtts
+                };
+
+                if (existingLead) {
+                  const existingMsgs = Array.isArray(existingLead.messages) ? existingLead.messages : [];
+                  const hasMsg = existingMsgs.some(m => m.id === mid || (m.text === text && Math.abs((m.timestamp || 0) - now) < 5000));
+                  const updatedMessages = hasMsg ? existingMsgs : [...existingMsgs, newIncomingMessage];
+
+                  await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(leadId)}`, {
+                    method: 'PATCH',
+                    headers: {
+                      'apikey': SUPABASE_KEY,
+                      'Authorization': `Bearer ${SUPABASE_KEY}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      name: existingLead.name && !existingLead.name.includes('#') ? existingLead.name : senderName,
+                      inquiry: text,
+                      messages: updatedMessages,
+                      timestamp: now,
+                      last_activity: now,
+                      updated_time: nowIso,
+                      unread_count: (existingLead.unread_count || 0) + 1,
+                      updated_at: nowIso
+                    })
+                  });
+                } else {
+                  await fetch(`${SUPABASE_URL}/rest/v1/crm_leads`, {
+                    method: 'POST',
+                    headers: {
+                      'apikey': SUPABASE_KEY,
+                      'Authorization': `Bearer ${SUPABASE_KEY}`,
+                      'Content-Type': 'application/json',
+                      'Prefer': 'resolution=merge-duplicates'
+                    },
+                    body: JSON.stringify({
+                      id: leadId,
+                      name: senderName,
+                      platform: 'facebook',
+                      channel: pageId,
+                      channel_name: pageName,
+                      source_type: 'inbox',
+                      source_title: 'Messenger Inbox (Live 1s)',
+                      source_link: `https://www.facebook.com/${pageId}/inbox/`,
+                      contact: 'Facebook Messenger',
+                      inquiry: text,
+                      deal_value: 0,
+                      status: 'ทักใหม่ (New)',
+                      date: dateStr,
+                      timestamp: now,
+                      last_activity: now,
+                      updated_time: nowIso,
+                      follow_up_date: null,
+                      admin: 'แอดมินเพจ',
+                      notes: `ทักสดผ่าน Webhook จากเพจ ${pageName}`,
+                      tag: '⚡ ลูกค้าใหม่สดๆ 1 วิ',
+                      unread_count: 1,
+                      customer_psid: senderPsid,
+                      is_live_facebook_lead: true,
+                      messages: [newIncomingMessage],
+                      updated_at: nowIso
+                    })
+                  });
+                }
+              } catch (crmSyncErr) {
+                console.warn('Webhook sync to crm_leads error:', crmSyncErr);
+              }
+
               console.log(`Live Facebook message inserted for Page [${pageName}] from [${senderName}]: ${text}`);
             }
           } catch (eventErr) {
@@ -164,6 +257,100 @@ export default async function handler(req, res) {
                   },
                   body: JSON.stringify(insertPayload)
                 });
+
+                // Also sync comment directly into crm_leads
+                try {
+                  const commentLeadId = `fb-comment-${commentId}`;
+                  const getCommentLeadRes = await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(commentLeadId)}&select=*`, {
+                    headers: {
+                      'apikey': SUPABASE_KEY,
+                      'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                  });
+                  const existingCommentRows = await getCommentLeadRes.json();
+                  const existingCommentLead = Array.isArray(existingCommentRows) && existingCommentRows.length > 0 ? existingCommentRows[0] : null;
+
+                  const now = Date.now();
+                  const nowIso = new Date(now).toISOString();
+                  const nowThaiTime = new Date(now).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+                  const nowThaiDate = new Date(now).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' });
+                  const dateStr = `${nowThaiDate} ${nowThaiTime}`;
+
+                  const newCommentMessage = {
+                    id: commentId,
+                    sender: commenterName,
+                    text: commentText,
+                    time: nowThaiTime,
+                    timestamp: now,
+                    isCustomer: true,
+                    attachments: commentAtts
+                  };
+
+                  if (existingCommentLead) {
+                    const existingMsgs = Array.isArray(existingCommentLead.messages) ? existingCommentLead.messages : [];
+                    const hasMsg = existingMsgs.some(m => m.id === commentId);
+                    const updatedMessages = hasMsg ? existingMsgs : [...existingMsgs, newCommentMessage];
+
+                    await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(commentLeadId)}`, {
+                      method: 'PATCH',
+                      headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        inquiry: commentText,
+                        messages: updatedMessages,
+                        timestamp: now,
+                        last_activity: now,
+                        updated_time: nowIso,
+                        unread_count: (existingCommentLead.unread_count || 0) + 1,
+                        updated_at: nowIso
+                      })
+                    });
+                  } else {
+                    await fetch(`${SUPABASE_URL}/rest/v1/crm_leads`, {
+                      method: 'POST',
+                      headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates'
+                      },
+                      body: JSON.stringify({
+                        id: commentLeadId,
+                        name: commenterName,
+                        platform: 'facebook',
+                        channel: pageId,
+                        channel_name: pageName,
+                        source_type: 'post_comment',
+                        source_title: `โพสต์ ID: ${postId ? postId.slice(-8) : 'หน้าเพจ'}`,
+                        source_link: `https://www.facebook.com/${postId || pageId}`,
+                        contact: 'คอมเมนต์ใต้โพสต์ Facebook',
+                        inquiry: commentText,
+                        deal_value: 0,
+                        status: 'ทักใหม่ (New)',
+                        date: dateStr,
+                        timestamp: now,
+                        last_activity: now,
+                        updated_time: nowIso,
+                        follow_up_date: null,
+                        admin: 'แอดมินเพจ',
+                        notes: `คอมเมนต์สดใต้โพสต์ (${commentId}) เพจ ${pageName}`,
+                        tag: '📝 คอมเมนต์ใต้โพสต์',
+                        unread_count: 1,
+                        customer_psid: commenterId,
+                        comment_id: commentId,
+                        post_id: postId,
+                        is_live_facebook_lead: true,
+                        messages: [newCommentMessage],
+                        updated_at: nowIso
+                      })
+                    });
+                  }
+                } catch (commentCrmErr) {
+                  console.warn('Webhook comment sync to crm_leads error:', commentCrmErr);
+                }
 
                 console.log(`Live Post Comment inserted for Page [${pageName}] from [${commenterName}]: ${commentText}`);
               }

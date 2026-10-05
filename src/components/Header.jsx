@@ -4,18 +4,17 @@ import {
   Users, 
   Settings2, 
   PlusCircle, 
-  Download, 
   Sparkles,
   MessageSquare,
   SlidersHorizontal,
-  X,
   LogOut,
   Kanban,
   ChevronDown,
   RotateCcw,
   FileSpreadsheet,
   Database,
-  UserCheck
+  UserCheck,
+  Cloud
 } from 'lucide-react';
 
 export default function Header({ 
@@ -29,7 +28,9 @@ export default function Header({
   currentUser,
   onLogout,
   onOpenTeamModal,
-  teamMembersCount = 3
+  teamMembersCount = 3,
+  cloudSyncState = { status: 'connected', activeAdmins: 3 },
+  onRefreshCloudSync
 }) {
   const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -116,6 +117,54 @@ export default function Header({
               }}>
                 <span className="live-dot"></span> Live
               </span>
+
+              {/* Multi-Admin Cloud Sync Pill */}
+              <button
+                type="button"
+                onClick={onRefreshCloudSync}
+                title={
+                  cloudSyncState?.status === 'connected'
+                    ? `☁️ ระบบซิงก์เรียลไทม์กับ Supabase Cloud เรียบร้อย (แอดมิน ${cloudSyncState.activeAdmins || 3} คนเห็นตรงกัน 100%) คลิกเพื่อรีเฟรช`
+                    : cloudSyncState?.status === 'syncing'
+                    ? '🔄 กำลังซิงก์ข้อมูลขึ้น Supabase Cloud...'
+                    : '🟡 โหมดออฟไลน์ / บันทึกข้อมูลในเบราว์เซอร์อัตโนมัติ คลิกเพื่อลองเชื่อมต่อใหม่'
+                }
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: '0.68rem',
+                  fontWeight: '700',
+                  border: cloudSyncState?.status === 'connected' 
+                    ? '1px solid #bbf7d0' 
+                    : cloudSyncState?.status === 'syncing'
+                    ? '1px solid #bfdbfe' 
+                    : '1px solid #fde047',
+                  backgroundColor: cloudSyncState?.status === 'connected' 
+                    ? '#f0fdf4' 
+                    : cloudSyncState?.status === 'syncing'
+                    ? '#eff6ff' 
+                    : '#fefce8',
+                  color: cloudSyncState?.status === 'connected' 
+                    ? '#15803d' 
+                    : cloudSyncState?.status === 'syncing'
+                    ? '#1d4ed8' 
+                    : '#854d0e',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Cloud size={11} className={cloudSyncState?.status === 'syncing' ? 'spin-icon' : ''} />
+                <span>
+                  {cloudSyncState?.status === 'connected' 
+                    ? 'Cloud ซิงก์ 3 แอดมิน' 
+                    : cloudSyncState?.status === 'syncing' 
+                    ? 'กำลังซิงก์...' 
+                    : 'ออฟไลน์'}
+                </span>
+              </button>
             </div>
           </div>
         </div>
