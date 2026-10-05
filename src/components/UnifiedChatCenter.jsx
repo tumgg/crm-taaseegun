@@ -39,11 +39,13 @@ import {
   REAL_TAASEEGUN_PAGE_ID,
   REAL_TAASEEGUN_TOKEN,
   REAL_ROOMS_PAINTING_PAGE_ID,
-  REAL_ROOMS_PAINTING_TOKEN 
+  REAL_ROOMS_PAINTING_TOKEN,
+  REAL_TEXTURE_BEAR_PAGE_ID,
+  REAL_TEXTURE_BEAR_TOKEN
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
-import { fetchLiveFacebookConversations } from '../utils/facebookLiveSync';
+import { fetchLiveFacebookConversations, sendFacebookMessengerReply } from '../utils/facebookLiveSync';
 
 export default function UnifiedChatCenter({ 
   leads, 
@@ -64,9 +66,10 @@ export default function UnifiedChatCenter({
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [isSyncingFb, setIsSyncingFb] = useState(false);
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
 
   // Sync real live conversations from Meta Graph API for all connected pages
-  const handleSyncRealFacebook = async () => {
+  const handleSyncRealFacebook = async (silent = false) => {
     const isValidToken = (t) => typeof t === 'string' && t.startsWith('EAA') && !t.includes('...') && t.length > 50;
 
     // Collect all pages with verified tokens
@@ -99,7 +102,16 @@ export default function UnifiedChatCenter({
       });
     }
 
-    setIsSyncingFb(true);
+    // Ensure Texture Bear (ช่างหมี) is included
+    if (!pagesToSync.some(p => p.id === REAL_TEXTURE_BEAR_PAGE_ID)) {
+      pagesToSync.push({
+        id: REAL_TEXTURE_BEAR_PAGE_ID,
+        name: 'รับทำสีเทกเจอร์ texture สีตกแต่งพิเศษ by ช่างหมี',
+        activePageToken: REAL_TEXTURE_BEAR_TOKEN
+      });
+    }
+
+    if (!silent) setIsSyncingFb(true);
     try {
       const syncPromises = pagesToSync.map(async (page) => {
         try {
@@ -124,34 +136,51 @@ export default function UnifiedChatCenter({
               ? 'ทาสีกัน' 
               : res.pageName.includes('RoomsPainting') 
                 ? 'RoomsPainting' 
-                : res.pageName;
+                : res.pageName.includes('ช่างหมี')
+                  ? 'ช่างหมี'
+                  : res.pageName;
           pageSummaries.push(`${shortName}: ${res.leads.length} แชท`);
         }
       }
 
       if (allNewLeads.length === 0) {
-        alert('เชื่อมต่อสำเร็จ แต่ยังไม่มีบทสนทนาใหม่ใน Inbox ของเพจที่เชื่อมต่อครับ');
+        if (!silent) alert('เชื่อมต่อสำเร็จ แต่ยังไม่มีบทสนทนาใหม่ใน Inbox ของเพจที่เชื่อมต่อครับ');
       } else {
+        let addedCount = 0;
         setLeads(prev => {
           const existingIds = new Set(prev.map(l => l.id));
           const newUnique = allNewLeads.filter(l => !existingIds.has(l.id));
+          addedCount = newUnique.length;
           return [...newUnique, ...prev];
         });
 
-        if (isSoundEnabled) {
+        if (isSoundEnabled && (addedCount > 0 || !silent)) {
           playNotificationSound();
         }
 
-        setSelectedLeadId(allNewLeads[0].id);
-        setToastNotification(`🎉 ซิงค์แชทสดสำเร็จ! รวม ${allNewLeads.length} แชทจริงจาก Facebook (${pageSummaries.join(', ')})`);
-        setTimeout(() => setToastNotification(null), 6000);
+        if (!silent || addedCount > 0) {
+          setSelectedLeadId(allNewLeads[0].id);
+          setToastNotification(addedCount > 0 
+            ? `🔔 มีแชทใหม่เข้ามา ${addedCount} รายการ! (${pageSummaries.join(', ')})`
+            : `🎉 ซิงค์แชทสดสำเร็จ! รวม ${allNewLeads.length} แชทจริงจาก Facebook (${pageSummaries.join(', ')})`);
+          setTimeout(() => setToastNotification(null), 6000);
+        }
       }
     } catch (err) {
-      alert(`ไม่สามารถดึงข้อมูลจาก Facebook API ได้: ${err.message}`);
+      if (!silent) alert(`ไม่สามารถดึงข้อมูลจาก Facebook API ได้: ${err.message}`);
     } finally {
-      setIsSyncingFb(false);
+      if (!silent) setIsSyncingFb(false);
     }
   };
+
+  // Background Auto-sync effect (every 30 seconds if enabled)
+  useEffect(() => {
+    if (!isAutoSyncEnabled) return;
+    const interval = setInterval(() => {
+      handleSyncRealFacebook(true);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [isAutoSyncEnabled, facebookPages, isSoundEnabled]);
   
   const chatMessagesContainerRef = useRef(null);
 
@@ -201,14 +230,15 @@ export default function UnifiedChatCenter({
   ) : null;
 
   // Handle Send Message
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e?.preventDefault();
     if (!replyText.trim() || !activeLead) return;
 
+    const messageTextToSend = replyText.trim();
     const newMessage = {
       id: `msg-${Date.now()}`,
       sender: 'admin',
-      text: replyText.trim(),
+      text: messageTextToSend,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       adminName: activeAdminName,
       isCommentReply: replyMode === 'comment'
@@ -232,6 +262,27 @@ export default function UnifiedChatCenter({
 
     setLeads(updatedLeads);
     setReplyText('');
+
+    // If real live Facebook lead with customerPsid, attempt real API message delivery
+    if (activeLead.customerPsid && replyMode === 'inbox') {
+      const pageToken = activeLead.activePageToken || 
+        (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
+         activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
+         activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
+         activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
+
+      if (pageToken) {
+        try {
+          await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
+          setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ ${activeLead.name} สำเร็จ!`);
+          setTimeout(() => setToastNotification(null), 5000);
+        } catch (sendErr) {
+          console.warn('Facebook Messenger send warning:', sendErr);
+          setToastNotification(`บันทึกในระบบแล้ว (หมายเหตุ Facebook API: ${sendErr.message || 'ลูกค้าทักมาเกิน 24 ชม.'})`);
+          setTimeout(() => setToastNotification(null), 6000);
+        }
+      }
+    }
   };
 
   // AI Smart Draft Reply Generator
@@ -465,15 +516,15 @@ export default function UnifiedChatCenter({
         </div>
 
         {/* Live Sync Real Facebook & Simulation Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
-            onClick={handleSyncRealFacebook}
+            onClick={() => handleSyncRealFacebook(false)}
             disabled={isSyncingFb}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '7px 15px',
+              padding: '7px 14px',
               borderRadius: '8px',
               backgroundColor: '#1877f2',
               color: '#ffffff',
@@ -484,10 +535,48 @@ export default function UnifiedChatCenter({
               cursor: isSyncingFb ? 'not-allowed' : 'pointer',
               opacity: isSyncingFb ? 0.75 : 1
             }}
-            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้ (Good Vibes, ทาสีกัน & RoomsPainting)"
+            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้ (Good Vibes, ทาสีกัน, RoomsPainting & ช่างหมี เทกเจอร์)"
           >
             <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
-            {isSyncingFb ? 'กำลังดึงแชทสดทุกเพจ...' : '⚡ ดึงแชทสดจากทุกเพจ Facebook (3 เพจ)'}
+            {isSyncingFb ? 'กำลังดึงแชทสดทุกเพจ...' : '⚡ ดึงแชทสด Facebook (4 เพจ)'}
+          </button>
+
+          {/* Auto-Sync Toggle Button */}
+          <button
+            onClick={() => {
+              const nextState = !isAutoSyncEnabled;
+              setIsAutoSyncEnabled(nextState);
+              if (nextState) {
+                setToastNotification('🟢 เปิดระบบ Auto-Sync: คอยดึงแชทใหม่ทุก 30 วินาทีอัตโนมัติ');
+                setTimeout(() => setToastNotification(null), 4000);
+              } else {
+                setToastNotification('⚪ ปิดระบบ Auto-Sync เรียบร้อย');
+                setTimeout(() => setToastNotification(null), 3000);
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 11px',
+              borderRadius: '8px',
+              backgroundColor: isAutoSyncEnabled ? '#ecfdf5' : '#f8fafc',
+              color: isAutoSyncEnabled ? '#059669' : '#64748b',
+              fontSize: '0.78rem',
+              fontWeight: '700',
+              border: isAutoSyncEnabled ? '1.5px solid #10b981' : '1px solid #cbd5e1',
+              cursor: 'pointer'
+            }}
+            title="เปิด/ปิดการเช็กแชทใหม่ให้อัตโนมัติทุก 30 วินาทีในพื้นหลัง"
+          >
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isAutoSyncEnabled ? '#10b981' : '#94a3b8',
+              display: 'inline-block'
+            }} />
+            Auto-Sync 30s: {isAutoSyncEnabled ? 'ON' : 'OFF'}
           </button>
         </div>
       </div>
@@ -518,7 +607,7 @@ export default function UnifiedChatCenter({
           overflow: 'hidden'
         }}>
           {/* Header & Filters */}
-          <div style={{ padding: '14px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff', flexShrink: 0 }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <h3 style={{ fontSize: '0.98rem', fontWeight: '800', color: '#0f172a' }}>
                 รวมแชทและคอมเมนต์
@@ -535,20 +624,19 @@ export default function UnifiedChatCenter({
               </span>
             </div>
 
-            {/* Page Filter Tabs */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+            {/* Page Filter Tabs (5 buttons with clean wrap) */}
+            <div style={{ display: 'flex', gap: '3px', marginBottom: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setFilterChannel('all')}
                 style={{
-                  flex: 1,
                   padding: '4px 6px',
                   borderRadius: '6px',
-                  fontSize: '0.72rem',
+                  fontSize: '0.7rem',
                   fontWeight: filterChannel === 'all' ? '700' : '500',
                   backgroundColor: filterChannel === 'all' ? '#0f172a' : '#f1f5f9',
                   color: filterChannel === 'all' ? '#ffffff' : '#64748b',
                   border: 'none',
-                  textAlign: 'center'
+                  cursor: 'pointer'
                 }}
               >
                 ทุกเพจ
@@ -556,18 +644,14 @@ export default function UnifiedChatCenter({
               <button
                 onClick={() => setFilterChannel(REAL_GOOD_VIBES_PAGE_ID)}
                 style={{
-                  flex: 1,
                   padding: '4px 6px',
                   borderRadius: '6px',
-                  fontSize: '0.72rem',
+                  fontSize: '0.7rem',
                   fontWeight: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '700' : '500',
                   backgroundColor: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '#1877f2' : '#f1f5f9',
                   color: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '#ffffff' : '#64748b',
                   border: 'none',
-                  textAlign: 'center',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  cursor: 'pointer'
                 }}
                 title="Good Vibes Texture"
               >
@@ -576,18 +660,14 @@ export default function UnifiedChatCenter({
               <button
                 onClick={() => setFilterChannel(REAL_TAASEEGUN_PAGE_ID)}
                 style={{
-                  flex: 1,
                   padding: '4px 6px',
                   borderRadius: '6px',
-                  fontSize: '0.72rem',
+                  fontSize: '0.7rem',
                   fontWeight: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '700' : '500',
                   backgroundColor: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '#d97706' : '#f1f5f9',
                   color: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '#ffffff' : '#64748b',
                   border: 'none',
-                  textAlign: 'center',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  cursor: 'pointer'
                 }}
                 title="บริษัท ทาสีกัน จำกัด"
               >
@@ -596,22 +676,34 @@ export default function UnifiedChatCenter({
               <button
                 onClick={() => setFilterChannel(REAL_ROOMS_PAINTING_PAGE_ID)}
                 style={{
-                  flex: 1,
                   padding: '4px 6px',
                   borderRadius: '6px',
-                  fontSize: '0.72rem',
+                  fontSize: '0.7rem',
                   fontWeight: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '700' : '500',
                   backgroundColor: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '#7c3aed' : '#f1f5f9',
                   color: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '#ffffff' : '#64748b',
                   border: 'none',
-                  textAlign: 'center',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  cursor: 'pointer'
                 }}
                 title="ทาสีคอนโด RoomsPainting"
               >
                 🏢 RoomsPainting
+              </button>
+              <button
+                onClick={() => setFilterChannel(REAL_TEXTURE_BEAR_PAGE_ID)}
+                style={{
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  fontWeight: filterChannel === REAL_TEXTURE_BEAR_PAGE_ID ? '700' : '500',
+                  backgroundColor: filterChannel === REAL_TEXTURE_BEAR_PAGE_ID ? '#ea580c' : '#f1f5f9',
+                  color: filterChannel === REAL_TEXTURE_BEAR_PAGE_ID ? '#ffffff' : '#64748b',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                title="รับทำสีเทกเจอร์ by ช่างหมี"
+              >
+                🐻 ช่างหมี
               </button>
             </div>
 
@@ -776,6 +868,18 @@ export default function UnifiedChatCenter({
                           border: '1px solid #ddd6fe'
                         }}>
                           🏢 RoomsPainting
+                        </span>
+                      ) : lead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? (
+                        <span style={{
+                          fontSize: '0.66rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: '#fff7ed',
+                          color: '#c2410c',
+                          fontWeight: '700',
+                          border: '1px solid #fed7aa'
+                        }}>
+                          🐻 ช่างหมี
                         </span>
                       ) : (
                         <span style={{

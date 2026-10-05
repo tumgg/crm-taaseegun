@@ -84,6 +84,9 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
           isLiveFacebookLead: true,
           unreadCount: conv.unread_count || 0,
           tag: 'ลูกค้าเพจจริง',
+          convId: conv.id,
+          customerPsid: customerSender?.id || null,
+          activePageToken: pageToken,
           messages: messageList
         };
       } catch (convErr) {
@@ -97,5 +100,30 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
   } catch (error) {
     console.error('Error fetching live Facebook conversations:', error);
     throw error;
+  }
+}
+
+export async function sendFacebookMessengerReply(pageToken, recipientPsid, messageText) {
+  try {
+    const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientPsid },
+        message: { text: messageText },
+        messaging_type: 'RESPONSE'
+      })
+    });
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.error.message || 'ไม่สามารถส่งข้อความผ่าน Facebook API ได้');
+    }
+    return data;
+  } catch (err) {
+    console.error('Error sending Facebook Messenger reply:', err);
+    throw err;
   }
 }
