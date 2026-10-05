@@ -34,7 +34,8 @@ import {
   Image as ImageIcon,
   Download,
   X,
-  Maximize2
+  Maximize2,
+  Info
 } from 'lucide-react';
 import { 
   leadStatusOptions, 
@@ -63,6 +64,30 @@ import {
 import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
 import SavedRepliesModal from './SavedRepliesModal';
+
+export function getInitials(name) {
+  if (!name) return 'ลูก';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+export function getAvatarBg(name) {
+  const colors = [
+    { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
+    { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe' },
+    { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
+    { bg: '#fff7ed', text: '#ea580c', border: '#fed7aa' },
+    { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8' },
+    { bg: '#fefce8', text: '#ca8a04', border: '#fef08a' }
+  ];
+  if (!name) return colors[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
+  return colors[hash % colors.length];
+}
 
 export function getPageTheme(channelId) {
   if (channelId === REAL_TAASEEGUN_PAGE_ID) {
@@ -275,6 +300,9 @@ export default function UnifiedChatCenter({
 
   // Saved Replies Modal State (การตอบกลับที่บันทึกไว้ พร้อมรูปภาพ)
   const [isSavedRepliesOpen, setIsSavedRepliesOpen] = useState(false);
+
+  // Toggle Right CRM Info Pane (ให้พื้นที่แชทกว้างขึ้น สบายตา)
+  const [isRightPaneOpen, setIsRightPaneOpen] = useState(true);
 
   // Handle Selection of Saved Reply (ข้อความตอบกลับที่บันทึกไว้ พร้อมรูปภาพ)
   const handleSelectSavedReply = async (reply) => {
@@ -987,7 +1015,7 @@ export default function UnifiedChatCenter({
         </div>
       )}
 
-      {/* Top Controls Bar for Live Chat Center */}
+      {/* Sleek, Slim Top Status Bar for Live Chat Center */}
       <div 
         className={isMobile && mobileTab !== 'list' ? 'mobile-hide' : ''}
         style={{
@@ -997,16 +1025,28 @@ export default function UnifiedChatCenter({
           backgroundColor: '#ffffff',
           border: '1px solid #e2e8f0',
           borderRadius: '12px',
-          padding: '6px 14px',
+          padding: '5px 12px',
           marginBottom: '8px',
           flexWrap: 'wrap',
           gap: '8px',
-          flexShrink: 0
+          flexShrink: 0,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="live-dot"></span> Live Inbox Active
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ 
+            fontWeight: '700', 
+            fontSize: '0.78rem', 
+            color: '#15803d', 
+            backgroundColor: '#f0fdf4',
+            padding: '3px 8px',
+            borderRadius: '999px',
+            border: '1px solid #bbf7d0',
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '5px' 
+          }}>
+            <span className="live-dot"></span> ออนไลน์สด
           </div>
 
           {/* Sound Toggle */}
@@ -1018,19 +1058,20 @@ export default function UnifiedChatCenter({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              backgroundColor: isSoundEnabled ? '#eff6ff' : '#f1f5f9',
+              gap: '4px',
+              padding: '3px 9px',
+              borderRadius: '999px',
+              backgroundColor: isSoundEnabled ? '#eff6ff' : '#f8fafc',
               color: isSoundEnabled ? '#1d4ed8' : '#64748b',
-              fontSize: '0.78rem',
+              fontSize: '0.74rem',
               fontWeight: '600',
-              border: isSoundEnabled ? '1px solid #bfdbfe' : '1px solid #cbd5e1'
+              border: isSoundEnabled ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+              cursor: 'pointer'
             }}
             title="เปิด/ปิดเสียงแจ้งเตือนเมื่อมีลูกค้าทักเข้ามา"
           >
-            {isSoundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-            เสียงเตือน: {isSoundEnabled ? 'เปิด (มีเสียง)' : 'ปิด'}
+            {isSoundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+            <span>{isSoundEnabled ? 'เปิดเสียง' : 'ปิดเสียง'}</span>
           </button>
 
           {/* AI Auto-Pilot Mode Toggle */}
@@ -1039,46 +1080,47 @@ export default function UnifiedChatCenter({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '8px',
+              gap: '4px',
+              padding: '3px 9px',
+              borderRadius: '999px',
               backgroundColor: isAutoPilotEnabled ? '#ecfdf5' : '#f8fafc',
               color: isAutoPilotEnabled ? '#059669' : '#64748b',
-              fontSize: '0.78rem',
-              fontWeight: '700',
-              border: isAutoPilotEnabled ? '1px solid #a7f3d0' : '1px solid #cbd5e1'
+              fontSize: '0.74rem',
+              fontWeight: '600',
+              border: isAutoPilotEnabled ? '1px solid #a7f3d0' : '1px solid #cbd5e1',
+              cursor: 'pointer'
             }}
             title="เมื่อเปิดใช้งาน AI จะตอบข้อความแรกให้ลูกค้าทันทีใน 1 วินาที"
           >
-            <Bot size={14} />
-            AI Auto-Pilot: {isAutoPilotEnabled ? 'ON (ตอบอัตโนมัติ)' : 'OFF'}
+            <Bot size={13} />
+            <span>AI ตอบสด: {isAutoPilotEnabled ? 'ON' : 'OFF'}</span>
           </button>
         </div>
 
-        {/* Live Sync Real Facebook & Simulation Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {/* Live Sync Real Facebook & Auto Sync */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
             onClick={() => handleSyncRealFacebook(false)}
             disabled={isSyncingFb}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '7px 14px',
-              borderRadius: '8px',
+              gap: '5px',
+              padding: '4px 11px',
+              borderRadius: '999px',
               backgroundColor: '#1877f2',
               color: '#ffffff',
-              fontSize: '0.8rem',
+              fontSize: '0.75rem',
               fontWeight: '700',
               border: 'none',
-              boxShadow: '0 2px 8px rgba(24, 119, 242, 0.35)',
+              boxShadow: '0 1px 3px rgba(24, 119, 242, 0.25)',
               cursor: isSyncingFb ? 'not-allowed' : 'pointer',
               opacity: isSyncingFb ? 0.75 : 1
             }}
-            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้ (Good Vibes, ทาสีกัน, RoomsPainting & ช่างหมี เทกเจอร์)"
+            title="ดึงข้อความจริงล่าสุดจาก Inbox ทุกเพจ Facebook ที่เชื่อมต่อไว้"
           >
-            <RefreshCw size={14} className={isSyncingFb ? "animate-spin" : ""} />
-            {isSyncingFb ? 'กำลังดึงแชทสดทุกเพจ...' : '⚡ ดึงแชทสด Facebook (4 เพจ)'}
+            <RefreshCw size={13} className={isSyncingFb ? "animate-spin" : ""} />
+            <span>{isSyncingFb ? 'กำลังดึง...' : 'ดึงแชทสด 4 เพจ'}</span>
           </button>
 
           {/* Auto-Sync Toggle Button */}
@@ -1097,54 +1139,27 @@ export default function UnifiedChatCenter({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 11px',
-              borderRadius: '8px',
+              gap: '5px',
+              padding: '4px 9px',
+              borderRadius: '999px',
               backgroundColor: isAutoSyncEnabled ? '#ecfdf5' : '#f8fafc',
               color: isAutoSyncEnabled ? '#059669' : '#64748b',
-              fontSize: '0.78rem',
-              fontWeight: '700',
-              border: isAutoSyncEnabled ? '1.5px solid #10b981' : '1px solid #cbd5e1',
+              fontSize: '0.73rem',
+              fontWeight: '600',
+              border: isAutoSyncEnabled ? '1px solid #86efac' : '1px solid #cbd5e1',
               cursor: 'pointer'
             }}
             title="เปิด/ปิดการเช็กแชทใหม่ให้อัตโนมัติทุก 10 วินาทีในพื้นหลัง"
           >
             <span style={{
-              width: '8px',
-              height: '8px',
+              width: '7px',
+              height: '7px',
               borderRadius: '50%',
               backgroundColor: isAutoSyncEnabled ? '#10b981' : '#94a3b8',
               display: 'inline-block'
             }} />
-            Auto-Sync 10s: {isAutoSyncEnabled ? 'ON' : 'OFF'}
+            <span>Auto-Sync 10s</span>
           </button>
-
-          {/* Instant 1-Second Real-Time Webhook Badge */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 11px',
-              borderRadius: '8px',
-              backgroundColor: isRealtimeWebhookActive ? '#f0fdf4' : '#f8fafc',
-              color: isRealtimeWebhookActive ? '#15803d' : '#64748b',
-              fontSize: '0.76rem',
-              fontWeight: '700',
-              border: isRealtimeWebhookActive ? '1.5px solid #86efac' : '1px solid #cbd5e1'
-            }}
-            title="ระบบ Webhook เชื่อมต่อสดกับ Supabase Realtime พร้อมผลักข้อความลูกค้าเข้าหน้าจอใน 1 วินาที"
-          >
-            <span style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: isRealtimeWebhookActive ? '#22c55e' : '#94a3b8',
-              display: 'inline-block',
-              boxShadow: isRealtimeWebhookActive ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none'
-            }} />
-            ⚡ สด 1 วิ: {isRealtimeWebhookActive ? 'พร้อมรับข้อความทันที' : 'กำลังเชื่อมต่อ'}
-          </div>
         </div>
       </div>
 
@@ -1153,7 +1168,7 @@ export default function UnifiedChatCenter({
         className="chat-grid-container"
         style={{
           display: isMobile ? 'flex' : 'grid',
-          gridTemplateColumns: isMobile ? 'none' : '330px 1fr 290px',
+          gridTemplateColumns: isMobile ? 'none' : (isRightPaneOpen ? '320px 1fr 280px' : '320px 1fr'),
           flexDirection: isMobile ? 'column' : 'initial',
           flex: 1,
           minHeight: 0,
@@ -1438,96 +1453,121 @@ export default function UnifiedChatCenter({
                       if (isMobile) setMobileTab('chat');
                     }}
                     style={{
-                      padding: '11px 13px',
+                      padding: '10px 12px',
                       margin: '4px 6px',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? theme.bgSelected : (hasUnread ? theme.bgHover : theme.bg),
-                      borderLeft: `5px solid ${isSelected ? theme.borderSelected : (hasDueFollowUp ? '#ef4444' : theme.borderLeft)}`,
-                      borderTop: `1px solid ${isSelected ? theme.primary : theme.cardBorder}`,
-                      borderRight: `1px solid ${isSelected ? theme.primary : theme.cardBorder}`,
-                      borderBottom: `1px solid ${isSelected ? theme.primary : theme.cardBorder}`,
-                      boxShadow: isSelected ? `0 2px 8px ${theme.primary}25` : '0 1px 2px rgba(0,0,0,0.03)',
+                      backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                      borderLeft: isSelected ? '4px solid #1877f2' : (hasDueFollowUp ? '4px solid #ef4444' : '4px solid transparent'),
+                      borderTop: '1px solid #f1f5f9',
+                      borderRight: '1px solid #f1f5f9',
+                      borderBottom: '1px solid #f1f5f9',
+                      boxShadow: isSelected ? '0 2px 6px rgba(24, 119, 242, 0.12)' : '0 1px 2px rgba(0,0,0,0.02)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
                       transition: 'all 0.15s ease'
                     }}
                     onMouseOver={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = theme.bgHover;
+                        e.currentTarget.style.backgroundColor = '#f8fafc';
                         e.currentTarget.style.transform = 'translateY(-1px)';
                       }
                     }}
                     onMouseOut={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = hasUnread ? theme.bgHover : theme.bg;
+                        e.currentTarget.style.backgroundColor = '#ffffff';
                         e.currentTarget.style.transform = 'translateY(0)';
                       }
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '3px' }}>
-                      <div style={{ 
-                        fontWeight: hasUnread || isSelected ? '800' : '700', 
-                        fontSize: '0.86rem', 
-                        color: isSelected ? theme.darkText : '#0f172a', 
-                        maxWidth: '180px', 
-                        overflow: 'hidden', 
-                        textOverflow: 'ellipsis', 
-                        whiteSpace: 'nowrap' 
-                      }}>
-                        {lead.name}
-                      </div>
-                      <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: '500', whiteSpace: 'nowrap' }}>
-                        {lead.date?.split(' ')[1] || 'เมื่อสักครู่'}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: '0.66rem',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        backgroundColor: theme.badgeBg,
-                        color: theme.badgeText,
-                        fontWeight: '800',
-                        border: `1px solid ${theme.badgeBorder}`,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px'
-                      }}>
-                        {theme.icon} {theme.shortName}
-                      </span>
-
-                      <span style={{ color: '#cbd5e1' }}>•</span>
-                      {renderSourceTypeBadge(lead.sourceType)}
-                      
-                      {hasDueFollowUp && (
-                        <span style={{
-                          backgroundColor: '#fef2f2',
-                          color: '#dc2626',
-                          fontSize: '0.65rem',
+                    {/* Customer Friendly Avatar Circle */}
+                    {(() => {
+                      const av = getAvatarBg(lead.name);
+                      return (
+                        <div style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '50%',
+                          backgroundColor: av.bg,
+                          color: av.text,
+                          border: `1px solid ${av.border}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           fontWeight: '800',
-                          padding: '1px 5px',
-                          borderRadius: '4px',
-                          marginLeft: 'auto'
+                          fontSize: '0.8rem',
+                          flexShrink: 0
                         }}>
-                          ⏰ ตามวันนี้
-                        </span>
-                      )}
-                    </div>
+                          {getInitials(lead.name)}
+                        </div>
+                      );
+                    })()}
 
-                    <div style={{
-                      fontSize: '0.76rem',
-                      color: hasUnread ? '#0f172a' : '#475569',
-                      fontWeight: hasUnread ? '600' : '400',
-                      lineHeight: '1.35',
-                      maxHeight: '34px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      wordBreak: 'break-word'
-                    }}>
-                      {lastMsg}
+                    {/* Card Content */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <div style={{ 
+                          fontWeight: hasUnread || isSelected ? '800' : '700', 
+                          fontSize: '0.86rem', 
+                          color: isSelected ? '#1d4ed8' : '#0f172a', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap' 
+                        }}>
+                          {lead.name}
+                        </div>
+                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                          {lead.date?.split(' ')[1] || 'เมื่อสักครู่'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: '0.65rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: theme.badgeBg,
+                          color: theme.badgeText,
+                          fontWeight: '800',
+                          border: `1px solid ${theme.badgeBorder}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          {theme.icon} {theme.shortName}
+                        </span>
+
+                        {hasDueFollowUp && (
+                          <span style={{
+                            backgroundColor: '#fef2f2',
+                            color: '#dc2626',
+                            fontSize: '0.65rem',
+                            fontWeight: '800',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            marginLeft: 'auto'
+                          }}>
+                            ⏰ ตามวันนี้
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{
+                        fontSize: '0.76rem',
+                        color: hasUnread ? '#0f172a' : '#64748b',
+                        fontWeight: hasUnread ? '600' : '400',
+                        lineHeight: '1.3',
+                        maxHeight: '32px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        wordBreak: 'break-word'
+                      }}>
+                        {lastMsg}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1589,6 +1629,29 @@ export default function UnifiedChatCenter({
                     </button>
                   )}
 
+                  {/* Active Customer Avatar */}
+                  {(() => {
+                    const av = getAvatarBg(activeLead.name);
+                    return (
+                      <div style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        backgroundColor: av.bg,
+                        color: av.text,
+                        border: `1px solid ${av.border}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: '800',
+                        fontSize: '0.85rem',
+                        flexShrink: 0
+                      }}>
+                        {getInitials(activeLead.name)}
+                      </div>
+                    );
+                  })()}
+
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                       <h3 style={{ fontSize: '0.96rem', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1627,21 +1690,55 @@ export default function UnifiedChatCenter({
                       )}
                     </div>
 
-                    {activeLead.sourceTitle && (
+                    {activeLead.sourceTitle ? (
                       <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <span>{renderSourceTypeBadge(activeLead.sourceType)}:</span>
-                        <strong style={{ color: '#334155' }}>{activeLead.sourceTitle}</strong>
+                        {renderSourceTypeBadge(activeLead.sourceType)}
+                        <span style={{ color: '#334155', fontWeight: '600' }}>{activeLead.sourceTitle}</span>
                         {activeLead.sourceLink && (
-                          <a href={activeLead.sourceLink} target="_blank" rel="noreferrer" style={{ color: '#3b82f6' }}>
+                          <a href={activeLead.sourceLink} target="_blank" rel="noreferrer" style={{ color: '#1877f2' }}>
                             <ExternalLink size={11} />
                           </a>
                         )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                        {renderSourceTypeBadge(activeLead.sourceType || 'inbox')}
+                        <span>บทสนทนา Messenger</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  {/* Toggle Customer Info Panel Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isMobile) {
+                        setMobileTab('profile');
+                      } else {
+                        setIsRightPaneOpen(!isRightPaneOpen);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '6px 11px',
+                      borderRadius: '8px',
+                      backgroundColor: isRightPaneOpen ? '#eff6ff' : '#f8fafc',
+                      color: isRightPaneOpen ? '#1d4ed8' : '#64748b',
+                      border: isRightPaneOpen ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title={isRightPaneOpen ? 'ซ่อนแผงข้อมูลลูกค้า' : 'แสดงแผงข้อมูลลูกค้า'}
+                  >
+                    <Info size={14} />
+                    <span>{isRightPaneOpen ? 'ซ่อนข้อมูล' : 'ข้อมูลลูกค้า'}</span>
+                  </button>
                   <select
                     value={activeLead.status}
                     onChange={(e) => handleUpdateLeadField('status', e.target.value)}
@@ -1798,27 +1895,30 @@ export default function UnifiedChatCenter({
                         maxWidth: '75%',
                         boxShadow: 'var(--shadow-sm)'
                       }}>
-                        <div style={{
-                          fontSize: '0.7rem',
-                          fontWeight: '700',
-                          color: isAdmin ? '#bfdbfe' : '#64748b',
-                          marginBottom: '3px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}>
-                          <span>{isAdmin ? `👤 ${msg.adminName || 'แอดมิน'}` : activeLead.name}</span>
-                          {msg.isComment && (
-                            <span style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
-                              จากคอมเมนต์
-                            </span>
-                          )}
-                          {msg.isCommentReply && (
-                            <span style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
-                              ตอบใต้คอมเมนต์
-                            </span>
-                          )}
-                        </div>
+                        {/* Clean sender label - only show if human agent or customer */}
+                        {(!isAdmin || (msg.adminName && !msg.adminName.includes('Good Vibes') && !msg.adminName.includes('ทาสีกัน') && !msg.adminName.includes('RoomsPainting') && !msg.adminName.includes('ช่างหมี') && msg.adminName !== 'แอดมินเพจ')) && (
+                          <div style={{
+                            fontSize: '0.7rem',
+                            fontWeight: '700',
+                            color: isAdmin ? 'rgba(255,255,255,0.85)' : '#64748b',
+                            marginBottom: '3px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            <span>{isAdmin ? `👤 ${msg.adminName}` : activeLead.name}</span>
+                            {msg.isComment && (
+                              <span style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
+                                จากคอมเมนต์
+                              </span>
+                            )}
+                            {msg.isCommentReply && (
+                              <span style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
+                                ตอบใต้คอมเมนต์
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* Render Attachments (Images, Stickers, Videos, Documents) */}
                         {msg.attachments && msg.attachments.length > 0 && (
@@ -2207,7 +2307,7 @@ export default function UnifiedChatCenter({
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   {/* Hidden Photo Input (accept="image/*") */}
                   <input
                     type="file"
@@ -2226,118 +2326,101 @@ export default function UnifiedChatCenter({
                     style={{ display: 'none' }}
                   />
 
-                  {/* 1. DEDICATED PHOTO ATTACHMENT BUTTON */}
+                  {/* 1. DEDICATED PHOTO ATTACHMENT BUTTON (Compact Icon) */}
                   <button
                     type="button"
                     onClick={() => imageInputRef.current?.click()}
                     style={{
-                      padding: isMobile ? '0 10px' : '0 14px',
-                      height: '52px',
-                      borderRadius: '10px',
-                      border: selectedAttachment?.type === 'image' ? '2px solid #2563eb' : '1.5px solid #93c5fd',
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      border: selectedAttachment?.type === 'image' ? '2px solid #2563eb' : '1px solid #bfdbfe',
                       backgroundColor: selectedAttachment?.type === 'image' ? '#dbeafe' : '#eff6ff',
                       color: '#1d4ed8',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '5px',
                       cursor: 'pointer',
                       flexShrink: 0,
-                      fontSize: '0.84rem',
-                      fontWeight: '700',
-                      transition: 'all 0.15s ease',
-                      boxShadow: '0 1px 3px rgba(37, 99, 235, 0.12)'
+                      transition: 'all 0.15s ease'
                     }}
-                    title="แนบรูปภาพส่งให้ลูกค้า (เลือกรูปจากอัลบั้ม หรือถ่ายรูป)"
+                    title="แนบรูปภาพส่งให้ลูกค้า"
                   >
                     <Camera size={19} />
-                    <span>{isMobile ? 'รูปภาพ' : 'แนบรูปภาพ'}</span>
                   </button>
 
-                  {/* 2. DOCUMENT ATTACHMENT BUTTON */}
+                  {/* 2. DOCUMENT ATTACHMENT BUTTON (Compact Icon) */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     style={{
-                      padding: isMobile ? '0 9px' : '0 12px',
-                      height: '52px',
-                      borderRadius: '10px',
-                      border: (selectedAttachment && selectedAttachment.type !== 'image') ? '2px solid #2563eb' : '1.5px solid #cbd5e1',
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      border: (selectedAttachment && selectedAttachment.type !== 'image') ? '2px solid #2563eb' : '1px solid #cbd5e1',
                       backgroundColor: (selectedAttachment && selectedAttachment.type !== 'image') ? '#eff6ff' : '#f8fafc',
                       color: (selectedAttachment && selectedAttachment.type !== 'image') ? '#2563eb' : '#64748b',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '4px',
                       cursor: 'pointer',
                       flexShrink: 0,
-                      fontSize: '0.82rem',
-                      fontWeight: '600',
                       transition: 'all 0.15s ease'
                     }}
                     title="แนบเอกสาร PDF หรือไฟล์อื่นๆ"
                   >
-                    <Paperclip size={17} />
-                    {!isMobile && <span>เอกสาร/PDF</span>}
+                    <Paperclip size={18} />
                   </button>
 
-                  {/* 3. CATALOG BUTTON IN COMPOSER */}
+                  {/* 3. CATALOG BUTTON IN COMPOSER (Compact Icon) */}
                   <button
                     type="button"
                     onClick={() => setIsPortfolioCatalogOpen(true)}
                     style={{
-                      padding: isMobile ? '0 9px' : '0 12px',
-                      height: '52px',
-                      borderRadius: '10px',
-                      border: '1.5px solid #a855f7',
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      border: '1px solid #ddd6fe',
                       backgroundColor: '#faf5ff',
                       color: '#7e22ce',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '4px',
                       cursor: 'pointer',
                       flexShrink: 0,
-                      fontSize: '0.82rem',
-                      fontWeight: '700',
                       transition: 'all 0.15s ease'
                     }}
-                    title="เปิดคลังรูปตัวอย่างสีเทกเจอร์และผลงานทาสีเพื่อส่งให้ลูกค้า"
+                    title="เปิดคลังรูปตัวอย่างสีเทกเจอร์และผลงานทาสี (Catalog)"
                   >
-                    <ImageIcon size={17} />
-                    {!isMobile && <span>คลังผลงาน</span>}
+                    <ImageIcon size={18} />
                   </button>
 
-                  {/* 4. SAVED REPLIES BUTTON IN COMPOSER (การตอบกลับที่บันทึกไว้) */}
+                  {/* 4. SAVED REPLIES BUTTON IN COMPOSER (Compact Icon) */}
                   <button
                     type="button"
                     onClick={() => setIsSavedRepliesOpen(prev => !prev)}
                     style={{
-                      padding: isMobile ? '0 9px' : '0 12px',
-                      height: '52px',
-                      borderRadius: '10px',
-                      border: isSavedRepliesOpen ? '2px solid #1877f2' : '1.5px solid #1877f2',
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      border: isSavedRepliesOpen ? '2px solid #1877f2' : '1px solid #bfdbfe',
                       backgroundColor: isSavedRepliesOpen ? '#1877f2' : '#eff6ff',
                       color: isSavedRepliesOpen ? '#ffffff' : '#1877f2',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '5px',
                       cursor: 'pointer',
                       flexShrink: 0,
-                      fontSize: '0.82rem',
-                      fontWeight: '700',
                       transition: 'all 0.15s ease'
                     }}
                     title="การตอบกลับที่บันทึกไว้ (เลือกข้อความสำเร็จรูป + รูปภาพ ส่งให้ลูกค้า)"
                   >
-                    <MessageSquare size={17} />
-                    {!isMobile && <span>ตอบกลับที่บันทึกไว้</span>}
+                    <MessageSquare size={18} />
                   </button>
 
-                  {/* Textarea with Paste (Ctrl+V) & Drag-Drop support */}
+                  {/* Textarea: Wide, Comfortable & Spacious */}
                   <textarea
-                    rows="2"
+                    rows="1"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     onPaste={handlePaste}
@@ -2354,57 +2437,61 @@ export default function UnifiedChatCenter({
                         ? (selectedAttachment.type === 'image' 
                             ? `พิมพ์ข้อความแนบไปกับรูปภาพนี้ (หรือไม่พิมพ์ก็ได้)... (Enter เพื่อส่ง)` 
                             : `พิมพ์ข้อความอธิบายไฟล์... (Enter เพื่อส่ง)`)
-                        : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Ctrl+V เพื่อวางรูปได้)`
+                        : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Enter เพื่อส่ง)`
                     }
                     style={{
                       flex: 1,
-                      padding: '9px 12px',
-                      borderRadius: '10px',
+                      minHeight: '44px',
+                      maxHeight: '110px',
+                      padding: '11px 14px',
+                      borderRadius: '12px',
                       border: '1.5px solid #cbd5e1',
-                      fontSize: '0.86rem',
+                      fontSize: '0.88rem',
                       fontFamily: 'inherit',
                       resize: 'none',
-                      backgroundColor: '#f8fafc',
-                      transition: 'border-color 0.2s, background-color 0.2s'
+                      backgroundColor: '#ffffff',
+                      lineHeight: '1.4',
+                      transition: 'border-color 0.2s, box-shadow 0.2s'
                     }}
                     onFocus={(e) => {
-                      e.target.style.borderColor = activeTheme.primary;
-                      e.target.style.backgroundColor = '#ffffff';
+                      e.target.style.borderColor = '#1877f2';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(24, 119, 242, 0.15)';
                     }}
                     onBlur={(e) => {
                       e.target.style.borderColor = '#cbd5e1';
-                      e.target.style.backgroundColor = '#f8fafc';
+                      e.target.style.boxShadow = 'none';
                     }}
                   />
 
+                  {/* Friendly Send Button */}
                   <button
                     type="submit"
                     disabled={(!replyText.trim() && !selectedAttachment) || isSendingAttachment}
                     style={{
-                      padding: '0 18px',
-                      borderRadius: '10px',
-                      backgroundColor: (replyText.trim() || selectedAttachment) ? activeTheme.primary : '#cbd5e1',
-                      color: '#ffffff',
+                      padding: '0 20px',
+                      borderRadius: '12px',
+                      backgroundColor: (replyText.trim() || selectedAttachment) ? '#1877f2' : '#e2e8f0',
+                      color: (replyText.trim() || selectedAttachment) ? '#ffffff' : '#94a3b8',
                       fontWeight: '700',
-                      fontSize: '0.88rem',
+                      fontSize: '0.86rem',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
                       cursor: ((replyText.trim() || selectedAttachment) && !isSendingAttachment) ? 'pointer' : 'not-allowed',
-                      height: '52px',
-                      boxShadow: (replyText.trim() || selectedAttachment) ? `0 2px 8px ${activeTheme.primary}40` : 'none',
-                      transition: 'var(--transition)',
+                      height: '44px',
+                      boxShadow: (replyText.trim() || selectedAttachment) ? '0 2px 8px rgba(24, 119, 242, 0.3)' : 'none',
+                      transition: 'all 0.15s ease',
                       flexShrink: 0
                     }}
                   >
                     {isSendingAttachment ? (
                       <>
-                        <RefreshCw size={16} className="spin-anim" /> กำลังส่งไฟล์...
+                        <RefreshCw size={15} className="spin-anim" /> ส่ง...
                       </>
                     ) : (
                       <>
-                        <Send size={16} /> ส่งข้อความ
+                        <Send size={15} /> ส่ง
                       </>
                     )}
                   </button>
@@ -2419,24 +2506,25 @@ export default function UnifiedChatCenter({
         </div>
 
         {/* ============================================================== */}
-        {/* 3. RIGHT PANE: CRM PROFILE & FOLLOW-UP REMINDER                 */}
+        {/* 3. RIGHT PANE: CRM PROFILE & FOLLOW-UP REMINDER (Collapsible)    */}
         {/* ============================================================== */}
-        <div 
-          className={`scrollable-pane chat-pane-right ${isMobile && mobileTab !== 'profile' ? 'mobile-hide' : 'mobile-show'}`}
-          style={{
-            borderLeft: isMobile ? 'none' : '1px solid #e2e8f0',
-            backgroundColor: '#ffffff',
-            padding: '14px',
-            height: '100%',
-            width: isMobile ? '100%' : 'auto',
-            minHeight: 0,
-            overflowY: 'auto',
-            overscrollBehavior: 'contain',
-            display: (isMobile && mobileTab !== 'profile') ? 'none' : 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}
-        >
+        {(!isMobile ? isRightPaneOpen : mobileTab === 'profile') && (
+          <div 
+            className={`scrollable-pane chat-pane-right ${isMobile && mobileTab !== 'profile' ? 'mobile-hide' : 'mobile-show'}`}
+            style={{
+              borderLeft: isMobile ? 'none' : '1px solid #e2e8f0',
+              backgroundColor: '#ffffff',
+              padding: '14px',
+              height: '100%',
+              width: isMobile ? '100%' : 'auto',
+              minHeight: 0,
+              overflowY: 'auto',
+              overscrollBehavior: 'contain',
+              display: (isMobile && mobileTab !== 'profile') ? 'none' : 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}
+          >
           {isMobile && (
             <button
               onClick={() => setMobileTab('chat')}
@@ -2663,6 +2751,7 @@ export default function UnifiedChatCenter({
             </>
           ) : null}
         </div>
+        )}
       </div>
 
       {/* Full-Screen Image Lightbox Modal */}
