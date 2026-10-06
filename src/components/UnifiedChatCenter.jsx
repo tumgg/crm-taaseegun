@@ -35,7 +35,8 @@ import {
   Download,
   X,
   Maximize2,
-  Info
+  Info,
+  Plus
 } from 'lucide-react';
 import { 
   leadStatusOptions, 
@@ -392,13 +393,15 @@ export default function UnifiedChatCenter({
       const newAttachments = validFiles.map((file, idx) => {
         const isImg = file.type.startsWith('image/');
         const isVid = file.type.startsWith('video/');
+        const objUrl = URL.createObjectURL(file);
         return {
           id: `att-file-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
           file,
           name: file.name,
           size: file.size,
           type: isImg ? 'image' : (isVid ? 'video' : 'file'),
-          previewUrl: isImg ? URL.createObjectURL(file) : null
+          previewUrl: isImg ? objUrl : null,
+          url: objUrl
         };
       });
 
@@ -1094,16 +1097,23 @@ export default function UnifiedChatCenter({
           // 3. Regular Messenger Inbox reply - Send all photos sequentially
           const filesToSend = attachmentsToSend.filter(a => a.file);
           if (filesToSend.length > 0) {
+            const isAllImages = filesToSend.every(f => f.file?.type?.startsWith('image/'));
             for (let i = 0; i < filesToSend.length; i++) {
               setSendingProgress({ current: i + 1, total: filesToSend.length });
-              setToastNotification(`🚀 กำลังส่งรูปภาพ (${i + 1}/${filesToSend.length}) เข้า Facebook Messenger...`);
+              const itemTypeLabel = filesToSend[i].file?.type?.startsWith('image/') 
+                ? 'รูปภาพ' 
+                : (filesToSend[i].file?.type === 'application/pdf' ? 'ไฟล์ PDF' : 'ไฟล์เอกสาร');
+              setToastNotification(`🚀 กำลังส่ง${itemTypeLabel} (${i + 1}/${filesToSend.length}) เข้า Facebook Messenger...`);
               await sendFacebookAttachment(pageToken, activeLead.customerPsid, filesToSend[i].file);
             }
             // If admin also entered text, send text message as well
             if (messageTextToSend) {
               await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
             }
-            setToastNotification(`✅ ส่งรูปภาพ ${filesToSend.length} รูปตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
+            const successLabel = isAllImages 
+              ? `รูปภาพ ${filesToSend.length} รูป` 
+              : `ไฟล์แนบ ${filesToSend.length} รายการ`;
+            setToastNotification(`✅ ส่ง${successLabel}ตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
           } else {
             await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
             setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
@@ -2726,32 +2736,57 @@ export default function UnifiedChatCenter({
                       color: '#1e3a8a'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>📷 เลือกไว้ {selectedAttachments.length} รายการ</span>
+                        <span>
+                          {selectedAttachments.some(a => a.type !== 'image') ? '📎' : '📷'} แนบไว้ {selectedAttachments.length} รายการ
+                        </span>
                         <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>
                           ({(selectedAttachments.reduce((acc, curr) => acc + (curr.size || 0), 0) / 1024).toFixed(0)} KB)
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button
-                          type="button"
-                          onClick={() => imageInputRef.current?.click()}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            background: '#eff6ff',
-                            border: '1px solid #bfdbfe',
-                            color: '#1d4ed8',
-                            borderRadius: '6px',
-                            padding: '3px 8px',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            cursor: 'pointer'
-                          }}
-                          title="เลือกรูปภาพเพิ่มอีก"
-                        >
-                          <Plus size={13} /> เพิ่มรูปอีก
-                        </button>
+                        {selectedAttachments.some(a => a.type !== 'image') ? (
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              color: '#1d4ed8',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              cursor: 'pointer'
+                            }}
+                            title="เลือกไฟล์เอกสาร/PDF เพิ่มอีก"
+                          >
+                            <Plus size={13} /> เพิ่มไฟล์อีก
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => imageInputRef.current?.click()}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              color: '#1d4ed8',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              cursor: 'pointer'
+                            }}
+                            title="เลือกรูปภาพเพิ่มอีก"
+                          >
+                            <Plus size={13} /> เพิ่มรูปอีก
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={handleClearAllAttachments}
