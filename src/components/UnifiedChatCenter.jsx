@@ -36,7 +36,10 @@ import {
   X,
   Maximize2,
   Info,
-  Plus
+  Plus,
+  Flame,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import {
   leadStatusOptions,
@@ -52,7 +55,13 @@ import {
   REAL_TEXTURE_BEAR_TOKEN
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
-import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
+import {
+  analyzeMessageIntent,
+  generateAIDraftReply,
+  generateChatSummary,
+  analyzeClosingScore,
+  detectFollowUpStatus
+} from '../utils/aiAssistant';
 import {
   fetchLiveFacebookConversations,
   sendFacebookMessengerReply,
@@ -339,6 +348,10 @@ export default function UnifiedChatCenter({
   const [customAvatarUrlInput, setCustomAvatarUrlInput] = useState('');
   const avatarFileInputRef = useRef(null);
   const chatInputRef = useRef(null);
+
+  // AI TL;DR Summary & Follow-Up UI States
+  const [isAiSummaryExpanded, setIsAiSummaryExpanded] = useState(false);
+  const [dismissedFollowUps, setDismissedFollowUps] = useState({});
 
   // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
@@ -983,7 +996,7 @@ export default function UnifiedChatCenter({
 
       let matchesType = true;
       if (filterType === 'due_followup') {
-        matchesType = isFollowUpDue(lead.followUpDate);
+        matchesType = isFollowUpDue(lead.followUpDate) || detectFollowUpStatus(lead).needsFollowUp;
       } else if (filterType === 'unreplied') {
         matchesType = !isLeadReplied(lead);
       } else if (filterType === 'replied') {
@@ -1004,6 +1017,22 @@ export default function UnifiedChatCenter({
       ? activeLead.messages[activeLead.messages.length - 1].text
       : activeLead.inquiry
   ) : null;
+
+  // AI Intelligence: TL;DR Summary, Deal Closing Score (0-100%), and Smart Follow-Up
+  const activeChatSummary = useMemo(() => activeLead ? generateChatSummary(activeLead) : '', [activeLead]);
+  const activeClosingScore = useMemo(() => activeLead ? analyzeClosingScore(activeLead) : null, [activeLead]);
+  const activeFollowUp = useMemo(() => activeLead ? detectFollowUpStatus(activeLead) : null, [activeLead]);
+
+  const handleApplyFollowUpTemplate = (templateText) => {
+    setReplyText(templateText);
+    if (chatInputRef.current) {
+      chatInputRef.current.focus();
+    }
+  };
+
+  const handleDismissFollowUp = (leadId) => {
+    setDismissedFollowUps(prev => ({ ...prev, [leadId]: true }));
+  };
 
   // Handle Send Message & Attachments (Supports Multiple Photos/Files)
   const handleSendMessage = async (e) => {
@@ -1316,7 +1345,13 @@ export default function UnifiedChatCenter({
     );
   };
 
-  const dueFollowUpsCount = leads.filter(l => isFollowUpDue(l.followUpDate)).length;
+  // Smart Follow-Up count (due date reached or customer silent > 18h)
+  const dueFollowUpsCount = useMemo(() => {
+    return leads.filter(l => {
+      const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? l.platform === 'facebook' : l.channel === filterChannel);
+      return matchesChannel && (isFollowUpDue(l.followUpDate) || detectFollowUpStatus(l).needsFollowUp);
+    }).length;
+  }, [leads, filterChannel]);
 
   // Counts of unreplied vs replied conversations (respecting current channel filter)
   const unrepliedCount = useMemo(() => {
@@ -1748,12 +1783,16 @@ export default function UnifiedChatCenter({
                   fontWeight: filterType === 'due_followup' ? '700' : '500',
                   backgroundColor: filterType === 'due_followup' ? '#ea580c' : '#ffffff',
                   color: filterType === 'due_followup' ? '#ffffff' : '#ea580c',
-                  border: '1px solid #fed7aa',
+                  border: filterType === 'due_followup' ? '1px solid #ea580c' : '1px solid #fed7aa',
                   whiteSpace: 'nowrap',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px'
                 }}
+                title="กรองแชทที่ถึงเวลาต้องติดตาม หรือลูกค้าเงียบไปเกิน 18 ชม."
               >
-                ⏰ ถึงเวลาตาม ({dueFollowUpsCount})
+                ⏰ ต้องตาม ({dueFollowUpsCount})
               </button>
               <button
                 onClick={() => setFilterType('video_comment')}
@@ -1828,6 +1867,9 @@ export default function UnifiedChatCenter({
                 const isSelected = lead.id === activeLead?.id;
                 const isReplied = isLeadReplied(lead);
                 const hasDueFollowUp = isFollowUpDue(lead.followUpDate);
+                const closingInfo = analyzeClosingScore(lead);
+                const followUpInfo = detectFollowUpStatus(lead);
+                const isFollowUpNeeded = hasDueFollowUp || followUpInfo.needsFollowUp;
                 const lastMsgObj = lead.messages && lead.messages.length > 0
                   ? lead.messages[lead.messages.length - 1]
                   : null;
@@ -1858,8 +1900,8 @@ export default function UnifiedChatCenter({
                       backgroundColor: isSelected ? '#eff6ff' : (!isReplied ? '#ffffff' : '#fafafa'),
                       borderLeft: isSelected
                         ? '4px solid #1877f2'
-                        : (hasDueFollowUp
-                          ? '4px solid #dc2626'
+                        : (isFollowUpNeeded
+                          ? '4px solid #ea580c'
                           : (!isReplied
                             ? '4px solid #ef4444'
                             : '4px solid #10b981'
@@ -1977,17 +2019,55 @@ export default function UnifiedChatCenter({
                           </span>
                         )}
 
-                        {hasDueFollowUp && (
+                        {/* FOLLOW-UP STATUS BADGE */}
+                        {followUpInfo.needsFollowUp ? (
+                          <span style={{
+                            backgroundColor: followUpInfo.urgency === 'high' ? '#fef2f2' : '#fff7ed',
+                            color: followUpInfo.urgency === 'high' ? '#dc2626' : '#c2410c',
+                            fontSize: '0.65rem',
+                            fontWeight: '800',
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            border: followUpInfo.urgency === 'high' ? '1px solid #fca5a5' : '1px solid #fed7aa',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            ⏰ เงียบ {followUpInfo.badgeText}
+                          </span>
+                        ) : hasDueFollowUp ? (
                           <span style={{
                             backgroundColor: '#fef2f2',
                             color: '#dc2626',
                             fontSize: '0.65rem',
                             fontWeight: '800',
-                            padding: '1px 5px',
-                            borderRadius: '4px',
-                            marginLeft: 'auto'
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            border: '1px solid #fca5a5'
                           }}>
                             ⏰ ตามวันนี้
+                          </span>
+                        ) : null}
+
+                        {/* CLOSING PROBABILITY BADGE */}
+                        {closingInfo && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            backgroundColor: closingInfo.score >= 75 ? '#fef2f2' : (closingInfo.score >= 45 ? '#fffbeb' : '#f0fdf4'),
+                            color: closingInfo.color,
+                            fontWeight: '800',
+                            border: `1px solid ${closingInfo.color}40`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            marginLeft: 'auto'
+                          }}
+                          title={`โอกาสปิดการขาย ${closingInfo.score}% (${closingInfo.label})`}
+                          >
+                            {closingInfo.score >= 75 ? <Flame size={10} color="#ef4444" fill="#ef4444" /> : '⚡'}
+                            {closingInfo.score}%
                           </span>
                         )}
                       </div>
@@ -2221,6 +2301,227 @@ export default function UnifiedChatCenter({
                   )}
                 </div>
               </div>
+
+              {/* Option 2: AI Chat TL;DR Summary & Closing Probability Ribbon */}
+              {activeLead && (
+                <div style={{
+                  backgroundColor: '#ffffff',
+                  borderBottom: '1px solid #e2e8f0',
+                  padding: '7px 16px',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    flexWrap: 'wrap'
+                  }}>
+                    {/* Left: AI Summary Pill & 1-Liner */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flex: 1,
+                      minWidth: '240px'
+                    }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        backgroundColor: '#eff6ff',
+                        color: '#1d4ed8',
+                        fontSize: '0.72rem',
+                        fontWeight: '800',
+                        border: '1px solid #bfdbfe',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
+                      }}>
+                        <Sparkles size={12} color="#2563eb" />
+                        AI สรุปงาน:
+                      </span>
+                      <span style={{
+                        fontSize: '0.77rem',
+                        color: '#334155',
+                        fontWeight: '600',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        flex: 1
+                      }}
+                      title={activeChatSummary}
+                      >
+                        {activeChatSummary}
+                      </span>
+                    </div>
+
+                    {/* Right: Closing Score Meter & Detail Toggle */}
+                    {activeClosingScore && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        flexShrink: 0
+                      }}>
+                        {/* Closing Score Pill */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '3px 10px',
+                          borderRadius: '999px',
+                          backgroundColor: activeClosingScore.score >= 75 ? '#fef2f2' : (activeClosingScore.score >= 45 ? '#fffbeb' : '#f0fdf4'),
+                          border: `1.5px solid ${activeClosingScore.color}60`,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                        }}>
+                          {activeClosingScore.score >= 75 ? (
+                            <Flame size={13} color="#ef4444" fill="#ef4444" />
+                          ) : (
+                            <span style={{ fontSize: '0.76rem' }}>⚡</span>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{
+                              fontSize: '0.74rem',
+                              fontWeight: '800',
+                              color: activeClosingScore.color
+                            }}>
+                              โอกาสปิดดีล: {activeClosingScore.score}%
+                            </span>
+                            <span style={{
+                              fontSize: '0.68rem',
+                              color: '#64748b',
+                              fontWeight: '600'
+                            }}>
+                              ({activeClosingScore.tier})
+                            </span>
+                          </div>
+                          {/* Mini Progress Bar */}
+                          <div style={{
+                            width: '42px',
+                            height: '6px',
+                            borderRadius: '999px',
+                            backgroundColor: '#e2e8f0',
+                            overflow: 'hidden'
+                          }}>
+                            <div style={{
+                              width: `${activeClosingScore.score}%`,
+                              height: '100%',
+                              backgroundColor: activeClosingScore.color,
+                              borderRadius: '999px',
+                              transition: 'width 0.5s ease'
+                            }} />
+                          </div>
+                        </div>
+
+                        {/* Toggle Expand Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsAiSummaryExpanded(!isAiSummaryExpanded)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            backgroundColor: isAiSummaryExpanded ? '#f1f5f9' : '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            color: '#475569',
+                            fontSize: '0.70rem',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                          }}
+                          title={isAiSummaryExpanded ? 'ย่อสรุป' : 'ดูสัญญาณซื้อและคำแนะนำ AI'}
+                        >
+                          {isAiSummaryExpanded ? (
+                            <>ย่อ <ChevronUp size={12} /></>
+                          ) : (
+                            <>สัญญาณซื้อ <ChevronDown size={12} /></>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Expanded Drawer: Buying Signals & Recommended Next Action */}
+                  {isAiSummaryExpanded && activeClosingScore && (
+                    <div style={{
+                      marginTop: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #e2e8f0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                      {/* Buying Signals */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.70rem', color: '#64748b', fontWeight: '700' }}>
+                          🔍 สัญญาณซื้อที่ตรวจพบ:
+                        </span>
+                        {activeClosingScore.signals.length > 0 ? (
+                          activeClosingScore.signals.map((sig, sIdx) => (
+                            <span
+                              key={sIdx}
+                              style={{
+                                fontSize: '0.68rem',
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                backgroundColor: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                color: '#334155',
+                                fontWeight: '600'
+                              }}
+                            >
+                              {sig}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ยังไม่พบสัญญาณซื้อเฉพาะเจาะจง</span>
+                        )}
+                      </div>
+
+                      {/* Recommended Action */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #dbeafe',
+                        fontSize: '0.73rem',
+                        color: '#1e40af'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: '800' }}>🎯 AI แนะนำขั้นตอนถัดไป:</span>
+                          <span>{activeClosingScore.recommendedNextStep}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleGenerateAiDraft}
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: '#2563eb',
+                            color: '#ffffff',
+                            border: 'none',
+                            fontSize: '0.68rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          ✨ ให้ AI ร่างตอบทันที
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Context Alert if customer came from a Comment */}
               {(activeLead.sourceType === 'video_comment' || activeLead.sourceType === 'post_comment') && (
@@ -2716,6 +3017,106 @@ export default function UnifiedChatCenter({
                 flexShrink: 0,
                 boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
               }}>
+                {/* Option 4: Smart Follow-Up Reminder & Nudge Banner */}
+                {activeFollowUp?.needsFollowUp && !dismissedFollowUps[activeLead?.id] && (
+                  <div style={{
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    background: activeFollowUp.urgency === 'high'
+                      ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
+                      : 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                    border: activeFollowUp.urgency === 'high' ? '1.5px solid #f87171' : '1.5px solid #fcd34d',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    animation: 'fadeIn 0.2s ease-out'
+                  }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Clock size={14} color={activeFollowUp.urgency === 'high' ? '#dc2626' : '#d97706'} />
+                        <span style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '800',
+                          color: activeFollowUp.urgency === 'high' ? '#991b1b' : '#92400e'
+                        }}>
+                          ลูกค้ายังไม่ได้ตอบกลับมา {activeFollowUp.badgeText} (ส่งล่าสุดเมื่อ {activeFollowUp.hoursElapsed} ชม. ที่แล้ว)
+                        </span>
+                        <span style={{
+                          fontSize: '0.66rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: activeFollowUp.urgency === 'high' ? '#ef4444' : '#f59e0b',
+                          color: '#ffffff',
+                          fontWeight: '800'
+                        }}>
+                          {activeFollowUp.urgency === 'high' ? '⏰ ตามด่วน' : '⏰ แนะนำ Follow-up'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDismissFollowUp(activeLead.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#94a3b8',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="ซ่อนการแจ้งเตือนนี้"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    {/* Quick 1-Click Action Buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.70rem', fontWeight: '700', color: '#475569' }}>
+                        ⚡ คลิกส่งข้อความตามลูกค้า:
+                      </span>
+                      {activeFollowUp.templates.map(tpl => (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => handleApplyFollowUpTemplate(tpl.text)}
+                          style={{
+                            padding: '4px 9px',
+                            borderRadius: '6px',
+                            backgroundColor: '#ffffff',
+                            border: activeFollowUp.urgency === 'high' ? '1px solid #fca5a5' : '1px solid #fde68a',
+                            fontSize: '0.72rem',
+                            fontWeight: '700',
+                            color: '#1e293b',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = '#eff6ff';
+                            e.currentTarget.style.borderColor = '#93c5fd';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = '#ffffff';
+                            e.currentTarget.style.borderColor = activeFollowUp.urgency === 'high' ? '#fca5a5' : '#fde68a';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }}
+                          title={tpl.shortDesc}
+                        >
+                          {tpl.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Multi-Attachment Preview Queue Tray */}
                 {selectedAttachments.length > 0 && (
                   <div style={{
@@ -3405,6 +3806,128 @@ export default function UnifiedChatCenter({
                     )}
                   </div>
                 </div>
+
+                {/* AI Sales Intelligence Card */}
+                {activeClosingScore && (
+                  <div style={{
+                    padding: '12px',
+                    borderRadius: '10px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: '800', color: '#0f172a' }}>
+                        <Sparkles size={14} color="#7c3aed" />
+                        AI โอกาสปิดการขาย
+                      </div>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: '800',
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        backgroundColor: activeClosingScore.score >= 75 ? '#fef2f2' : (activeClosingScore.score >= 45 ? '#fffbeb' : '#f0fdf4'),
+                        color: activeClosingScore.color,
+                        border: `1px solid ${activeClosingScore.color}50`
+                      }}>
+                        {activeClosingScore.score >= 75 ? '🔥 ' : ''}{activeClosingScore.score}% ({activeClosingScore.tier})
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div style={{
+                      width: '100%',
+                      height: '7px',
+                      borderRadius: '999px',
+                      backgroundColor: '#f1f5f9',
+                      overflow: 'hidden',
+                      marginBottom: '10px'
+                    }}>
+                      <div style={{
+                        width: `${activeClosingScore.score}%`,
+                        height: '100%',
+                        backgroundColor: activeClosingScore.color,
+                        borderRadius: '999px',
+                        transition: 'width 0.5s ease'
+                      }} />
+                    </div>
+
+                    {/* Signals List */}
+                    {activeClosingScore.signals.length > 0 && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <div style={{ fontSize: '0.70rem', fontWeight: '700', color: '#64748b', marginBottom: '4px' }}>
+                          สัญญาณความสนใจจากแชท:
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {activeClosingScore.signals.map((sig, sIdx) => (
+                            <div key={sIdx} style={{ fontSize: '0.72rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>•</span> {sig}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recommended Next Step */}
+                    <div style={{
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      backgroundColor: '#eff6ff',
+                      border: '1px solid #dbeafe',
+                      fontSize: '0.72rem',
+                      color: '#1e40af'
+                    }}>
+                      <div style={{ fontWeight: '800', color: '#1d4ed8', marginBottom: '2px' }}>
+                        🎯 AI แนะนำขั้นตอนถัดไป:
+                      </div>
+                      <div>{activeClosingScore.recommendedNextStep}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Follow-Up Status in CRM Panel */}
+                {activeFollowUp?.needsFollowUp && (
+                  <div style={{
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    backgroundColor: activeFollowUp.urgency === 'high' ? '#fef2f2' : '#fffbeb',
+                    border: activeFollowUp.urgency === 'high' ? '1.5px solid #fca5a5' : '1.5px solid #fde68a'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <Clock size={13} color={activeFollowUp.urgency === 'high' ? '#dc2626' : '#d97706'} />
+                      <span style={{ fontSize: '0.74rem', fontWeight: '800', color: activeFollowUp.urgency === 'high' ? '#991b1b' : '#92400e' }}>
+                        ⏰ ถึงเวลาส่งข้อความตามลูกค้า
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#475569', marginBottom: '8px' }}>
+                      ลูกค้าเงียบไป {activeFollowUp.badgeText} หลังแอดมินตอบล่าสุด
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {activeFollowUp.templates.map(tpl => (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => handleApplyFollowUpTemplate(tpl.text)}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.70rem',
+                            fontWeight: '600',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            color: '#334155'
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                        >
+                          {tpl.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Deal Value */}
                 <div>
