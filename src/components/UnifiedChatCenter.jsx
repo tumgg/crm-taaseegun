@@ -334,6 +334,7 @@ export default function UnifiedChatCenter({
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [customAvatarUrlInput, setCustomAvatarUrlInput] = useState('');
   const avatarFileInputRef = useRef(null);
+  const chatInputRef = useRef(null);
 
   // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
@@ -933,6 +934,17 @@ export default function UnifiedChatCenter({
       chatMessagesContainerRef.current.scrollTop = chatMessagesContainerRef.current.scrollHeight;
     }
   }, [activeLead?.messages, activeLead?.id]);
+
+  // Auto-expand chat input textarea to show 4-5 lines comfortably and adjust smoothly
+  useEffect(() => {
+    if (chatInputRef.current) {
+      chatInputRef.current.style.height = 'auto';
+      const targetMin = isMobile ? 80 : 105;
+      const scrollH = chatInputRef.current.scrollHeight;
+      const newHeight = Math.max(targetMin, Math.min(scrollH, 220));
+      chatInputRef.current.style.height = `${newHeight}px`;
+    }
+  }, [replyText, isMobile]);
 
   // Check if a lead has follow-up due
   const isFollowUpDue = (followUpDate) => {
@@ -2863,7 +2875,7 @@ export default function UnifiedChatCenter({
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                   {/* Hidden Photo Input (accept="image/*" multiple) */}
                   <input
                     type="file"
@@ -3018,9 +3030,10 @@ export default function UnifiedChatCenter({
                     <MessageSquare size={18} />
                   </button>
 
-                  {/* Textarea: Wide, Comfortable & Spacious */}
+                  {/* Textarea: Wide, Comfortable & Spacious (4-5 lines visible) */}
                   <textarea
-                    rows="1"
+                    ref={chatInputRef}
+                    rows={isMobile ? 3 : 4}
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     onPaste={handlePaste}
@@ -3035,22 +3048,23 @@ export default function UnifiedChatCenter({
                     placeholder={
                       selectedAttachments.length > 0 
                         ? (selectedAttachments.every(a => a.type === 'image') 
-                            ? `พิมพ์ข้อความแนบไปกับ ${selectedAttachments.length} รูปนี้ (หรือไม่พิมพ์ก็ได้)... (Enter เพื่อส่ง)` 
-                            : `พิมพ์ข้อความอธิบาย ${selectedAttachments.length} ไฟล์นี้... (Enter เพื่อส่ง)`)
-                        : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (กด Enter เพื่อส่ง)`
+                            ? `พิมพ์ข้อความแนบไปกับ ${selectedAttachments.length} รูปนี้ (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)...` 
+                            : `พิมพ์ข้อความอธิบาย ${selectedAttachments.length} ไฟล์นี้ (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)...`)
+                        : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)`
                     }
                     style={{
                       flex: 1,
-                      minHeight: '44px',
-                      maxHeight: '110px',
+                      minHeight: isMobile ? '80px' : '108px',
+                      maxHeight: '220px',
                       padding: '11px 14px',
                       borderRadius: '12px',
                       border: '1.5px solid #cbd5e1',
                       fontSize: '0.88rem',
                       fontFamily: 'inherit',
-                      resize: 'none',
+                      resize: 'vertical',
                       backgroundColor: '#ffffff',
-                      lineHeight: '1.4',
+                      lineHeight: '1.5',
+                      boxSizing: 'border-box',
                       transition: 'border-color 0.2s, box-shadow 0.2s'
                     }}
                     onFocus={(e) => {
