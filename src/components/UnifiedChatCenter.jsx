@@ -1,23 +1,23 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  Send, 
-  Search, 
+import {
+  Send,
+  Search,
   ArrowLeft,
-  MessageSquare, 
-  FileText, 
-  Video, 
-  Check, 
-  CheckCheck, 
-  Clock, 
-  ExternalLink, 
-  Sparkles, 
-  Paperclip, 
-  Smile, 
-  User, 
-  Phone, 
-  Mail, 
-  Tag, 
-  DollarSign, 
+  MessageSquare,
+  FileText,
+  Video,
+  Check,
+  CheckCheck,
+  Clock,
+  ExternalLink,
+  Sparkles,
+  Paperclip,
+  Smile,
+  User,
+  Phone,
+  Mail,
+  Tag,
+  DollarSign,
   AlertCircle,
   CornerDownRight,
   ShieldCheck,
@@ -38,9 +38,9 @@ import {
   Info,
   Plus
 } from 'lucide-react';
-import { 
-  leadStatusOptions, 
-  quickReplyTemplates, 
+import {
+  leadStatusOptions,
+  quickReplyTemplates,
   interactionTypeOptions,
   REAL_GOOD_VIBES_PAGE_ID,
   REAL_GOOD_VIBES_TOKEN,
@@ -53,11 +53,11 @@ import {
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import { analyzeMessageIntent, generateAIDraftReply } from '../utils/aiAssistant';
-import { 
-  fetchLiveFacebookConversations, 
-  sendFacebookMessengerReply, 
+import {
+  fetchLiveFacebookConversations,
+  sendFacebookMessengerReply,
   sendFacebookAttachment,
-  replyToFacebookComment, 
+  replyToFacebookComment,
   replyToFacebookCommentWithAttachment,
   sendFacebookPrivateReply,
   normalizeAttachment,
@@ -82,15 +82,18 @@ export const PRESET_AVATARS = [
 
 export function getLeadAvatarUrl(lead) {
   if (!lead) return null;
+  // 1. Manually set or uploaded avatar
   if (lead.avatar && typeof lead.avatar === 'string' && lead.avatar.trim()) {
     return lead.avatar.trim();
   }
-  if (lead.profilePic || lead.profile_pic) {
-    return lead.profilePic || lead.profile_pic;
+  // 2. Real profile picture from Facebook if provided by API
+  if (lead.profilePic && typeof lead.profilePic === 'string' && lead.profilePic.trim()) {
+    return lead.profilePic.trim();
   }
-  const seed = lead.customerPsid || lead.id || lead.name;
-  if (!seed) return null;
-  return `https://i.pravatar.cc/150?u=${encodeURIComponent(seed)}`;
+  if (lead.profile_pic && typeof lead.profile_pic === 'string' && lead.profile_pic.trim()) {
+    return lead.profile_pic.trim();
+  }
+  return null;
 }
 
 export function getInitials(name) {
@@ -134,8 +137,8 @@ export function CustomerAvatar({
     setImgError(false);
   }, [avatarUrl]);
 
-  const effectiveBorder = border !== undefined 
-    ? border 
+  const effectiveBorder = border !== undefined
+    ? border
     : (!isReplied ? '2px solid #f87171' : `1px solid ${av.border}`);
 
   return (
@@ -178,7 +181,7 @@ export function CustomerAvatar({
       {/* Instant Signal: Red dot if Unreplied, Green check if Replied */}
       {showStatusBadge && (
         !isReplied ? (
-          <span 
+          <span
             style={{
               position: 'absolute',
               top: '-2px',
@@ -190,11 +193,11 @@ export function CustomerAvatar({
               border: '2px solid #ffffff',
               boxShadow: '0 0 0 1px #dc2626',
               zIndex: 2
-            }} 
+            }}
             title="รอแอดมินตอบกลับ (ยังไม่ตอบ)"
           />
         ) : (
-          <span 
+          <span
             style={{
               position: 'absolute',
               bottom: '-2px',
@@ -212,7 +215,7 @@ export function CustomerAvatar({
               fontSize: '0.6rem',
               fontWeight: '900',
               zIndex: 2
-            }} 
+            }}
             title="แอดมินตอบลูกค้าแล้ว"
           >
             ✓
@@ -297,13 +300,13 @@ export function getPageTheme(channelId) {
   };
 }
 
-export default function UnifiedChatCenter({ 
-  leads, 
-  setLeads, 
-  facebookPages, 
-  selectedLeadId, 
+export default function UnifiedChatCenter({
+  leads,
+  setLeads,
+  facebookPages,
+  selectedLeadId,
   setSelectedLeadId,
-  currentUser 
+  currentUser
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all'); // 'all', 'inbox', 'video_comment', 'post_comment', 'due_followup'
@@ -683,12 +686,12 @@ export default function UnifiedChatCenter({
       for (const res of results) {
         if (res.leads.length > 0) {
           allNewLeads.push(...res.leads);
-          const shortName = res.pageName.includes('Good Vibes') 
-            ? 'Good Vibes' 
-            : res.pageName.includes('ทาสีกัน') 
-              ? 'ทาสีกัน' 
-              : res.pageName.includes('RoomsPainting') 
-                ? 'RoomsPainting' 
+          const shortName = res.pageName.includes('Good Vibes')
+            ? 'Good Vibes'
+            : res.pageName.includes('ทาสีกัน')
+              ? 'ทาสีกัน'
+              : res.pageName.includes('RoomsPainting')
+                ? 'RoomsPainting'
                 : res.pageName.includes('ช่างหมี')
                   ? 'ช่างหมี'
                   : res.pageName;
@@ -704,7 +707,7 @@ export default function UnifiedChatCenter({
 
         setLeads(prev => {
           const incomingMap = new Map(allNewLeads.map(l => [l.id, l]));
-          
+
           // Update existing conversations with latest messages from Facebook
           const updatedExisting = prev.map(oldLead => {
             const incoming = incomingMap.get(oldLead.id);
@@ -729,7 +732,7 @@ export default function UnifiedChatCenter({
               customerPsid: incoming.customerPsid || oldLead.customerPsid,
               activePageToken: incoming.activePageToken || oldLead.activePageToken,
               messages: (incoming.messages && incoming.messages.length > 0)
-                ? incoming.messages 
+                ? incoming.messages
                 : oldLead.messages
             };
           });
@@ -751,7 +754,7 @@ export default function UnifiedChatCenter({
           if (newLeadsCount > 0 && allNewLeads.length > 0) {
             setSelectedLeadId(allNewLeads[0].id);
           }
-          setToastNotification(hasNewUpdates 
+          setToastNotification(hasNewUpdates
             ? `🔔 มีข้อความใหม่เข้ามา! (${pageSummaries.join(', ')})`
             : `🎉 ซิงค์แชทสดสำเร็จ! รวม ${allNewLeads.length} แชทจริงจาก Facebook (${pageSummaries.join(', ')})`);
           setTimeout(() => setToastNotification(null), 5000);
@@ -823,11 +826,11 @@ export default function UnifiedChatCenter({
           };
 
           const isCommentEvent = !!newRow.raw_event?.isComment;
-          const matchedPageName = newRow.raw_event?.pageName || 
+          const matchedPageName = newRow.raw_event?.pageName ||
             (newRow.page_id === REAL_GOOD_VIBES_PAGE_ID ? 'Good Vibes' :
-             newRow.page_id === REAL_TAASEEGUN_PAGE_ID ? 'ทาสีกัน' :
-             newRow.page_id === REAL_ROOMS_PAINTING_PAGE_ID ? 'RoomsPainting' :
-             newRow.page_id === REAL_TEXTURE_BEAR_PAGE_ID ? 'ช่างหมี เทกเจอร์' : 'เพจ Facebook');
+              newRow.page_id === REAL_TAASEEGUN_PAGE_ID ? 'ทาสีกัน' :
+                newRow.page_id === REAL_ROOMS_PAINTING_PAGE_ID ? 'RoomsPainting' :
+                  newRow.page_id === REAL_TEXTURE_BEAR_PAGE_ID ? 'ช่างหมี เทกเจอร์' : 'เพจ Facebook');
 
           let isFound = false;
 
@@ -874,8 +877,8 @@ export default function UnifiedChatCenter({
                 channelName: matchedPageName,
                 sourceType: isCommentEvent ? 'post_comment' : 'inbox',
                 sourceTitle: isCommentEvent ? (newRow.raw_event?.postTitle || 'คอมเมนต์ใต้โพสต์') : 'Messenger Inbox (Live 1s)',
-                sourceLink: isCommentEvent 
-                  ? `https://www.facebook.com/${newRow.raw_event?.postId || newRow.page_id}` 
+                sourceLink: isCommentEvent
+                  ? `https://www.facebook.com/${newRow.raw_event?.postId || newRow.page_id}`
                   : `https://www.facebook.com/${newRow.page_id}/inbox/`,
                 contact: isCommentEvent ? 'คอมเมนต์ใต้โพสต์ Facebook' : 'Facebook Messenger',
                 inquiry: newRow.message_text,
@@ -887,7 +890,7 @@ export default function UnifiedChatCenter({
                 updatedTime: new Date(now).toISOString(),
                 followUpDate: null,
                 admin: 'แอดมินเพจ',
-                notes: isCommentEvent 
+                notes: isCommentEvent
                   ? `คอมเมนต์สดใต้โพสต์ (${newRow.raw_event?.commentId || ''}) เพจ ${matchedPageName}`
                   : `ทักสดผ่าน Webhook จากเพจ ${matchedPageName}`,
                 isLiveFacebookLead: true,
@@ -924,7 +927,7 @@ export default function UnifiedChatCenter({
       supabase.removeChannel(channel);
     };
   }, [isSoundEnabled]);
-  
+
   const chatMessagesContainerRef = useRef(null);
 
   // Default active lead selection
@@ -973,7 +976,7 @@ export default function UnifiedChatCenter({
   // Filter conversations and sort so the TRULY latest activity is on top across all pages
   const filteredConversations = sortLeadsByLatest(
     leads.filter(lead => {
-      const matchesSearch = 
+      const matchesSearch =
         (lead.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (lead.inquiry || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (lead.sourceTitle && lead.sourceTitle.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -997,8 +1000,8 @@ export default function UnifiedChatCenter({
 
   // Intent analysis of current active lead
   const currentIntent = activeLead ? analyzeMessageIntent(
-    activeLead.messages && activeLead.messages.length > 0 
-      ? activeLead.messages[activeLead.messages.length - 1].text 
+    activeLead.messages && activeLead.messages.length > 0
+      ? activeLead.messages[activeLead.messages.length - 1].text
       : activeLead.inquiry
   ) : null;
 
@@ -1068,11 +1071,11 @@ export default function UnifiedChatCenter({
     handleClearAllAttachments();
 
     // If real live Facebook lead, deliver each attachment via Facebook Graph API
-    const pageToken = activeLead.activePageToken || 
+    const pageToken = activeLead.activePageToken ||
       (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
-       activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
-       activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
-       activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
+        activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
+          activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
+            activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
 
     if (pageToken) {
       setIsSendingAttachment(true);
@@ -1100,8 +1103,8 @@ export default function UnifiedChatCenter({
             const isAllImages = filesToSend.every(f => f.file?.type?.startsWith('image/'));
             for (let i = 0; i < filesToSend.length; i++) {
               setSendingProgress({ current: i + 1, total: filesToSend.length });
-              const itemTypeLabel = filesToSend[i].file?.type?.startsWith('image/') 
-                ? 'รูปภาพ' 
+              const itemTypeLabel = filesToSend[i].file?.type?.startsWith('image/')
+                ? 'รูปภาพ'
                 : (filesToSend[i].file?.type === 'application/pdf' ? 'ไฟล์ PDF' : 'ไฟล์เอกสาร');
               setToastNotification(`🚀 กำลังส่ง${itemTypeLabel} (${i + 1}/${filesToSend.length}) เข้า Facebook Messenger...`);
               await sendFacebookAttachment(pageToken, activeLead.customerPsid, filesToSend[i].file);
@@ -1110,8 +1113,8 @@ export default function UnifiedChatCenter({
             if (messageTextToSend) {
               await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
             }
-            const successLabel = isAllImages 
-              ? `รูปภาพ ${filesToSend.length} รูป` 
+            const successLabel = isAllImages
+              ? `รูปภาพ ${filesToSend.length} รูป`
               : `ไฟล์แนบ ${filesToSend.length} รายการ`;
             setToastNotification(`✅ ส่ง${successLabel}ตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
           } else {
@@ -1357,7 +1360,7 @@ export default function UnifiedChatCenter({
       )}
 
       {/* Sleek, Slim Top Status Bar for Live Chat Center */}
-      <div 
+      <div
         className={isMobile && mobileTab !== 'list' ? 'mobile-hide' : ''}
         style={{
           display: (isMobile && mobileTab !== 'list') ? 'none' : 'flex',
@@ -1375,17 +1378,17 @@ export default function UnifiedChatCenter({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ 
-            fontWeight: '700', 
-            fontSize: '0.78rem', 
-            color: '#15803d', 
+          <div style={{
+            fontWeight: '700',
+            fontSize: '0.78rem',
+            color: '#15803d',
             backgroundColor: '#f0fdf4',
             padding: '3px 8px',
             borderRadius: '999px',
             border: '1px solid #bbf7d0',
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '5px' 
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px'
           }}>
             <span className="live-dot"></span> ออนไลน์สด
           </div>
@@ -1505,7 +1508,7 @@ export default function UnifiedChatCenter({
       </div>
 
       {/* Main 3-Column Chat Grid */}
-      <div 
+      <div
         className="chat-grid-container"
         style={{
           display: isMobile ? 'flex' : 'grid',
@@ -1524,7 +1527,7 @@ export default function UnifiedChatCenter({
         {/* ============================================================== */}
         {/* 1. LEFT PANE: CONVERSATION LIST                                 */}
         {/* ============================================================== */}
-        <div 
+        <div
           className={`chat-pane-left ${isMobile && mobileTab !== 'list' ? 'mobile-hide' : 'mobile-show'}`}
           style={{
             borderRight: isMobile ? 'none' : '1px solid #e2e8f0',
@@ -1788,8 +1791,8 @@ export default function UnifiedChatCenter({
           </div>
 
           {/* Scrollable Conversation List */}
-          <div 
-            className="scrollable-pane" 
+          <div
+            className="scrollable-pane"
             style={{
               flex: 1,
               minHeight: 0,
@@ -1825,8 +1828,8 @@ export default function UnifiedChatCenter({
                 const isSelected = lead.id === activeLead?.id;
                 const isReplied = isLeadReplied(lead);
                 const hasDueFollowUp = isFollowUpDue(lead.followUpDate);
-                const lastMsgObj = lead.messages && lead.messages.length > 0 
-                  ? lead.messages[lead.messages.length - 1] 
+                const lastMsgObj = lead.messages && lead.messages.length > 0
+                  ? lead.messages[lead.messages.length - 1]
                   : null;
                 let lastMsg = lastMsgObj ? lastMsgObj.text : lead.inquiry;
                 if (lastMsgObj && lastMsgObj.attachments?.length > 0 && (!lastMsg || lastMsg.startsWith('(') || lastMsg.includes('ไฟล์แนบ') || lastMsg.includes('รูปภาพ'))) {
@@ -1853,22 +1856,22 @@ export default function UnifiedChatCenter({
                       borderRadius: '12px',
                       cursor: 'pointer',
                       backgroundColor: isSelected ? '#eff6ff' : (!isReplied ? '#ffffff' : '#fafafa'),
-                      borderLeft: isSelected 
-                        ? '4px solid #1877f2' 
-                        : (hasDueFollowUp 
-                            ? '4px solid #dc2626' 
-                            : (!isReplied 
-                                ? '4px solid #ef4444' 
-                                : '4px solid #10b981'
-                              )),
+                      borderLeft: isSelected
+                        ? '4px solid #1877f2'
+                        : (hasDueFollowUp
+                          ? '4px solid #dc2626'
+                          : (!isReplied
+                            ? '4px solid #ef4444'
+                            : '4px solid #10b981'
+                          )),
                       borderTop: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
                       borderRight: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
                       borderBottom: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
-                      boxShadow: isSelected 
-                        ? '0 2px 8px rgba(24, 119, 242, 0.15)' 
-                        : (!isReplied 
-                            ? '0 2px 6px rgba(239, 68, 68, 0.06)' 
-                            : '0 1px 2px rgba(0,0,0,0.02)'),
+                      boxShadow: isSelected
+                        ? '0 2px 8px rgba(24, 119, 242, 0.15)'
+                        : (!isReplied
+                          ? '0 2px 6px rgba(239, 68, 68, 0.06)'
+                          : '0 1px 2px rgba(0,0,0,0.02)'),
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px',
@@ -1898,21 +1901,21 @@ export default function UnifiedChatCenter({
                     {/* Card Content */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-                        <div style={{ 
-                          fontWeight: !isReplied || isSelected ? '800' : '700', 
-                          fontSize: '0.87rem', 
-                          color: isSelected ? '#1d4ed8' : (!isReplied ? '#0f172a' : '#334155'), 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis', 
-                          whiteSpace: 'nowrap' 
+                        <div style={{
+                          fontWeight: !isReplied || isSelected ? '800' : '700',
+                          fontSize: '0.87rem',
+                          color: isSelected ? '#1d4ed8' : (!isReplied ? '#0f172a' : '#334155'),
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
                         }}>
                           {lead.name}
                         </div>
-                        <span style={{ 
-                          fontSize: '0.70rem', 
-                          color: !isReplied ? '#dc2626' : '#64748b', 
-                          fontWeight: !isReplied ? '700' : '500', 
-                          whiteSpace: 'nowrap' 
+                        <span style={{
+                          fontSize: '0.70rem',
+                          color: !isReplied ? '#dc2626' : '#64748b',
+                          fontWeight: !isReplied ? '700' : '500',
+                          whiteSpace: 'nowrap'
                         }}>
                           {formatConversationTime(lead)}
                         </span>
@@ -2024,7 +2027,7 @@ export default function UnifiedChatCenter({
         {/* ============================================================== */}
         {/* 2. MIDDLE PANE: LIVE CHAT & REPLY STREAM                        */}
         {/* ============================================================== */}
-        <div 
+        <div
           className={`chat-pane-center ${isMobile && mobileTab !== 'chat' ? 'mobile-hide' : 'mobile-show'}`}
           style={{
             display: (isMobile && mobileTab !== 'chat') ? 'none' : 'flex',
@@ -2274,9 +2277,9 @@ export default function UnifiedChatCenter({
               )}
 
               {/* Chat Messages Stream */}
-              <div 
+              <div
                 ref={chatMessagesContainerRef}
-                className="scrollable-pane" 
+                className="scrollable-pane"
                 style={{
                   flex: 1,
                   minHeight: 0,
@@ -2564,14 +2567,14 @@ export default function UnifiedChatCenter({
 
                         {/* Show text message if not just a placeholder */}
                         {msg.text && (
-                          !msg.attachments || 
-                          msg.attachments.length === 0 || 
+                          !msg.attachments ||
+                          msg.attachments.length === 0 ||
                           (!msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ')
                         ) && (
-                          <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                            {msg.text}
-                          </div>
-                        )}
+                            <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
+                              {msg.text}
+                            </div>
+                          )}
 
                         <div style={{
                           fontSize: '0.68rem',
@@ -3081,10 +3084,10 @@ export default function UnifiedChatCenter({
                       }
                     }}
                     placeholder={
-                      selectedAttachments.length > 0 
-                        ? (selectedAttachments.every(a => a.type === 'image') 
-                            ? `พิมพ์ข้อความแนบไปกับ ${selectedAttachments.length} รูปนี้ (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)...` 
-                            : `พิมพ์ข้อความอธิบาย ${selectedAttachments.length} ไฟล์นี้ (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)...`)
+                      selectedAttachments.length > 0
+                        ? (selectedAttachments.every(a => a.type === 'image')
+                          ? `พิมพ์ข้อความแนบไปกับ ${selectedAttachments.length} รูปนี้ (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)...`
+                          : `พิมพ์ข้อความอธิบาย ${selectedAttachments.length} ไฟล์นี้ (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)...`)
                         : `พิมพ์ข้อความตอบกลับ ${activeLead.name}... (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)`
                     }
                     style={{
@@ -3136,12 +3139,12 @@ export default function UnifiedChatCenter({
                   >
                     {isSendingAttachment ? (
                       <>
-                        <RefreshCw size={15} className="spin-anim" /> 
+                        <RefreshCw size={15} className="spin-anim" />
                         {sendingProgress ? `ส่ง ${sendingProgress.current}/${sendingProgress.total}...` : 'ส่ง...'}
                       </>
                     ) : (
                       <>
-                        <Send size={15} /> 
+                        <Send size={15} />
                         {selectedAttachments.length > 1 ? `ส่ง (${selectedAttachments.length})` : 'ส่ง'}
                       </>
                     )}
@@ -3160,7 +3163,7 @@ export default function UnifiedChatCenter({
         {/* 3. RIGHT PANE: CRM PROFILE & FOLLOW-UP REMINDER (Collapsible)    */}
         {/* ============================================================== */}
         {(!isMobile ? isRightPaneOpen : mobileTab === 'profile') && (
-          <div 
+          <div
             className={`scrollable-pane chat-pane-right ${isMobile && mobileTab !== 'profile' ? 'mobile-hide' : 'mobile-show'}`}
             style={{
               borderLeft: isMobile ? 'none' : '1px solid #e2e8f0',
@@ -3176,310 +3179,310 @@ export default function UnifiedChatCenter({
               gap: '12px'
             }}
           >
-          {isMobile && (
-            <button
-              onClick={() => setMobileTab('chat')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                backgroundColor: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                color: '#1d4ed8',
-                fontSize: '0.82rem',
-                fontWeight: '800',
-                cursor: 'pointer',
-                marginBottom: '2px'
-              }}
-            >
-              <ArrowLeft size={16} /> กลับไปที่หน้าต่างแชท
-            </button>
-          )}
-          {activeLead ? (
-            <>
-              {/* Follow-up Reminder Module */}
-              <div style={{
-                backgroundColor: isFollowUpDue(activeLead.followUpDate) ? '#fef2f2' : '#f8fafc',
-                border: isFollowUpDue(activeLead.followUpDate) ? '1px solid #fecaca' : '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '12px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <Clock size={16} color={isFollowUpDue(activeLead.followUpDate) ? '#dc2626' : '#64748b'} />
-                  <span style={{ fontSize: '0.82rem', fontWeight: '700', color: isFollowUpDue(activeLead.followUpDate) ? '#b91c1c' : '#1e293b' }}>
-                    ⏰ ติดตามผล (Follow-up)
-                  </span>
-                </div>
-
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>
-                  {activeLead.followUpDate ? (
-                    <div>
-                      วันนัดหมาย: <strong>{activeLead.followUpDate}</strong>{' '}
-                      {isFollowUpDue(activeLead.followUpDate) && <span style={{ color: '#dc2626', fontWeight: '800' }}>[ครบกำหนดแล้ว!]</span>}
-                    </div>
-                  ) : (
-                    'ยังไม่ได้ตั้งวันติดตามผล'
-                  )}
-                </div>
-
-                {/* Quick Follow-up Buttons */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '8px' }}>
-                  <button
-                    onClick={() => handleSetFollowUpDays(1)}
-                    style={{
-                      padding: '4px 6px',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      backgroundColor: '#ffffff',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      color: '#334155'
-                    }}
-                  >
-                    +1 วัน
-                  </button>
-                  <button
-                    onClick={() => handleSetFollowUpDays(2)}
-                    style={{
-                      padding: '4px 6px',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      backgroundColor: '#ffffff',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      color: '#334155'
-                    }}
-                  >
-                    +2 วัน
-                  </button>
-                  <button
-                    onClick={() => handleSetFollowUpDays(7)}
-                    style={{
-                      padding: '4px 6px',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      backgroundColor: '#ffffff',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      color: '#334155'
-                    }}
-                  >
-                    +1 สัปดาห์
-                  </button>
-                </div>
-
-                {/* Send Follow-up template button */}
-                <button
-                  onClick={() => {
-                    const name = (activeLead.name || 'ลูกค้า').replace(/\(.*?\)/g, '').trim();
-                    setReplyText(`สวัสดีครับคุณ${name} ทางเราขออนุญาตติดตามเรื่องข้อเสนอและเรทการ์ดที่ส่งให้ก่อนหน้านี้ครับ สะดวกพิจารณาหรือมีคำถามตรงไหนเพิ่มเติมไหมครับผม 😊`);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    borderRadius: '6px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #93c5fd',
-                    color: '#1d4ed8',
-                    fontSize: '0.73rem',
-                    fontWeight: '700'
-                  }}
-                >
-                  💬 ใส่ข้อความทักตามผล
-                </button>
-              </div>
-
-              {/* Customer Profile */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', margin: 0 }}>
-                    ข้อมูลลูกค้า
-                  </h4>
-                  <button
-                    onClick={() => setIsAvatarModalOpen(true)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px',
-                      backgroundColor: '#eff6ff',
-                      border: '1px solid #bfdbfe',
-                      borderRadius: '6px',
-                      color: '#1d4ed8',
-                      fontSize: '0.72rem',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-                    title="เปลี่ยนหรืออัปโหลดรูปโปรไฟล์ลูกค้า"
-                  >
-                    <Camera size={12} /> เปลี่ยนรูปโปรไฟล์
-                  </button>
-                </div>
-
-                {/* Profile Card with Photo */}
-                <div style={{
+            {isMobile && (
+              <button
+                onClick={() => setMobileTab('chat')}
+                style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px',
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  backgroundColor: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  color: '#1d4ed8',
+                  fontSize: '0.82rem',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  marginBottom: '2px'
+                }}
+              >
+                <ArrowLeft size={16} /> กลับไปที่หน้าต่างแชท
+              </button>
+            )}
+            {activeLead ? (
+              <>
+                {/* Follow-up Reminder Module */}
+                <div style={{
+                  backgroundColor: isFollowUpDue(activeLead.followUpDate) ? '#fef2f2' : '#f8fafc',
+                  border: isFollowUpDue(activeLead.followUpDate) ? '1px solid #fecaca' : '1px solid #e2e8f0',
                   borderRadius: '10px',
-                  marginBottom: '10px'
+                  padding: '12px'
                 }}>
-                  <div
-                    onClick={() => setIsAvatarModalOpen(true)}
-                    style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}
-                    title="คลิกเพื่อเปลี่ยนรูปโปรไฟล์"
-                  >
-                    <CustomerAvatar 
-                      lead={activeLead} 
-                      size={54} 
-                      border="2px solid #ffffff" 
-                      style={{ boxShadow: '0 2px 5px rgba(0,0,0,0.08)' }} 
-                    />
-                    <span style={{
-                      position: 'absolute',
-                      bottom: '-2px',
-                      right: '-2px',
-                      backgroundColor: '#2563eb',
-                      color: '#ffffff',
-                      borderRadius: '50%',
-                      width: '18px',
-                      height: '18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: '2px solid #ffffff',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
-                    }}>
-                      <Camera size={10} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                    <Clock size={16} color={isFollowUpDue(activeLead.followUpDate) ? '#dc2626' : '#64748b'} />
+                    <span style={{ fontSize: '0.82rem', fontWeight: '700', color: isFollowUpDue(activeLead.followUpDate) ? '#b91c1c' : '#1e293b' }}>
+                      ⏰ ติดตามผล (Follow-up)
                     </span>
                   </div>
 
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {activeLead.name}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                      {activeLead.avatar ? '🟢 รูปโปรไฟล์กำหนดเอง' : '🔵 รูปโปรไฟล์อัตโนมัติ'}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '5px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: activeTheme.badgeBg,
-                  border: `1px solid ${activeTheme.badgeBorder}`,
-                  color: activeTheme.badgeText,
-                  fontSize: '0.74rem',
-                  fontWeight: '800',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  marginBottom: '10px'
-                }}>
-                  {activeTheme.icon} เพจ: {activeLead.channelName || activeTheme.name}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                    <Phone size={14} color="#64748b" />
-                    <span>{activeLead.contact || 'Facebook Messenger'}</span>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>
+                    {activeLead.followUpDate ? (
+                      <div>
+                        วันนัดหมาย: <strong>{activeLead.followUpDate}</strong>{' '}
+                        {isFollowUpDue(activeLead.followUpDate) && <span style={{ color: '#dc2626', fontWeight: '800' }}>[ครบกำหนดแล้ว!]</span>}
+                      </div>
+                    ) : (
+                      'ยังไม่ได้ตั้งวันติดตามผล'
+                    )}
                   </div>
 
-                  {activeLead.tag && (
+                  {/* Quick Follow-up Buttons */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '8px' }}>
+                    <button
+                      onClick={() => handleSetFollowUpDays(1)}
+                      style={{
+                        padding: '4px 6px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        fontSize: '0.7rem',
+                        fontWeight: '600',
+                        color: '#334155'
+                      }}
+                    >
+                      +1 วัน
+                    </button>
+                    <button
+                      onClick={() => handleSetFollowUpDays(2)}
+                      style={{
+                        padding: '4px 6px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        fontSize: '0.7rem',
+                        fontWeight: '600',
+                        color: '#334155'
+                      }}
+                    >
+                      +2 วัน
+                    </button>
+                    <button
+                      onClick={() => handleSetFollowUpDays(7)}
+                      style={{
+                        padding: '4px 6px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        fontSize: '0.7rem',
+                        fontWeight: '600',
+                        color: '#334155'
+                      }}
+                    >
+                      +1 สัปดาห์
+                    </button>
+                  </div>
+
+                  {/* Send Follow-up template button */}
+                  <button
+                    onClick={() => {
+                      const name = (activeLead.name || 'ลูกค้า').replace(/\(.*?\)/g, '').trim();
+                      setReplyText(`สวัสดีครับคุณ${name} ทางเราขออนุญาตติดตามเรื่องข้อเสนอและเรทการ์ดที่ส่งให้ก่อนหน้านี้ครับ สะดวกพิจารณาหรือมีคำถามตรงไหนเพิ่มเติมไหมครับผม 😊`);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #93c5fd',
+                      color: '#1d4ed8',
+                      fontSize: '0.73rem',
+                      fontWeight: '700'
+                    }}
+                  >
+                    💬 ใส่ข้อความทักตามผล
+                  </button>
+                </div>
+
+                {/* Customer Profile */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', margin: 0 }}>
+                      ข้อมูลลูกค้า
+                    </h4>
+                    <button
+                      onClick={() => setIsAvatarModalOpen(true)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 8px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '6px',
+                        color: '#1d4ed8',
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                      title="เปลี่ยนหรืออัปโหลดรูปโปรไฟล์ลูกค้า"
+                    >
+                      <Camera size={12} /> เปลี่ยนรูปโปรไฟล์
+                    </button>
+                  </div>
+
+                  {/* Profile Card with Photo */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '10px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    marginBottom: '10px'
+                  }}>
+                    <div
+                      onClick={() => setIsAvatarModalOpen(true)}
+                      style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+                      title="คลิกเพื่อเปลี่ยนรูปโปรไฟล์"
+                    >
+                      <CustomerAvatar
+                        lead={activeLead}
+                        size={54}
+                        border="2px solid #ffffff"
+                        style={{ boxShadow: '0 2px 5px rgba(0,0,0,0.08)' }}
+                      />
+                      <span style={{
+                        position: 'absolute',
+                        bottom: '-2px',
+                        right: '-2px',
+                        backgroundColor: '#2563eb',
+                        color: '#ffffff',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #ffffff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                      }}>
+                        <Camera size={10} />
+                      </span>
+                    </div>
+
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {activeLead.name}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                        {activeLead.avatar ? '🟢 รูปโปรไฟล์กำหนดเอง' : '🔵 รูปโปรไฟล์อัตโนมัติ'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    padding: '5px 8px',
+                    borderRadius: '6px',
+                    backgroundColor: activeTheme.badgeBg,
+                    border: `1px solid ${activeTheme.badgeBorder}`,
+                    color: activeTheme.badgeText,
+                    fontSize: '0.74rem',
+                    fontWeight: '800',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    marginBottom: '10px'
+                  }}>
+                    {activeTheme.icon} เพจ: {activeLead.channelName || activeTheme.name}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                      <Tag size={14} color="#64748b" />
-                      <span>{activeLead.tag}</span>
+                      <Phone size={14} color="#64748b" />
+                      <span>{activeLead.contact || 'Facebook Messenger'}</span>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Deal Value */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
-                  มูลค่าดีลคาดการณ์ (บาท):
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#64748b' }}>฿</span>
-                  <input
-                    type="number"
-                    value={activeLead.dealValue || 0}
-                    onChange={(e) => handleUpdateLeadField('dealValue', Number(e.target.value))}
+                    {activeLead.tag && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
+                        <Tag size={14} color="#64748b" />
+                        <span>{activeLead.tag}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Deal Value */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
+                    มูลค่าดีลคาดการณ์ (บาท):
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#64748b' }}>฿</span>
+                    <input
+                      type="number"
+                      value={activeLead.dealValue || 0}
+                      onChange={(e) => handleUpdateLeadField('dealValue', Number(e.target.value))}
+                      style={{
+                        width: '100%',
+                        padding: '5px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.84rem',
+                        fontWeight: '700',
+                        color: '#0f172a'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Admin Assignment */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
+                    แอดมินผู้ดูแล:
+                  </label>
+                  <select
+                    value={activeLead.admin}
+                    onChange={(e) => handleUpdateLeadField('admin', e.target.value)}
                     style={{
                       width: '100%',
                       padding: '5px 8px',
                       borderRadius: '6px',
                       border: '1px solid #cbd5e1',
-                      fontSize: '0.84rem',
-                      fontWeight: '700',
-                      color: '#0f172a'
+                      fontSize: '0.78rem'
+                    }}
+                  >
+                    <option value="แอดมินนนท์">แอดมินนนท์</option>
+                    <option value="แอดมินแพรว">แอดมินแพรว</option>
+                    <option value="แอดมินโบว์">แอดมินโบว์</option>
+                    <option value="ยังไม่ได้มอบหมาย">ยังไม่ได้มอบหมาย</option>
+                  </select>
+                </div>
+
+                {/* Internal Notes Notepad */}
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
+                    โน้ตภายใน (Admin Notes):
+                  </label>
+                  <textarea
+                    rows="4"
+                    value={activeLead.notes || ''}
+                    onChange={(e) => handleUpdateLeadField('notes', e.target.value)}
+                    placeholder="บันทึกข้อตกลง ข้อกำหนด..."
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.76rem',
+                      fontFamily: 'inherit',
+                      backgroundColor: '#fffbeb'
                     }}
                   />
                 </div>
-              </div>
-
-              {/* Admin Assignment */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
-                  แอดมินผู้ดูแล:
-                </label>
-                <select
-                  value={activeLead.admin}
-                  onChange={(e) => handleUpdateLeadField('admin', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '5px 8px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.78rem'
-                  }}
-                >
-                  <option value="แอดมินนนท์">แอดมินนนท์</option>
-                  <option value="แอดมินแพรว">แอดมินแพรว</option>
-                  <option value="แอดมินโบว์">แอดมินโบว์</option>
-                  <option value="ยังไม่ได้มอบหมาย">ยังไม่ได้มอบหมาย</option>
-                </select>
-              </div>
-
-              {/* Internal Notes Notepad */}
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
-                  โน้ตภายใน (Admin Notes):
-                </label>
-                <textarea
-                  rows="4"
-                  value={activeLead.notes || ''}
-                  onChange={(e) => handleUpdateLeadField('notes', e.target.value)}
-                  placeholder="บันทึกข้อตกลง ข้อกำหนด..."
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.76rem',
-                    fontFamily: 'inherit',
-                    backgroundColor: '#fffbeb'
-                  }}
-                />
-              </div>
-            </>
-          ) : null}
-        </div>
+              </>
+            ) : null}
+          </div>
         )}
       </div>
 
       {/* Full-Screen Image Lightbox Modal */}
       {selectedImageModal && (
-        <div 
+        <div
           onClick={() => setSelectedImageModal(null)}
           style={{
             position: 'fixed',
@@ -3496,7 +3499,7 @@ export default function UnifiedChatCenter({
           }}
         >
           {/* Modal Header */}
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
@@ -3586,7 +3589,7 @@ export default function UnifiedChatCenter({
           </div>
 
           {/* Modal Image */}
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             style={{
               maxWidth: '92vw',
@@ -3633,7 +3636,7 @@ export default function UnifiedChatCenter({
 
       {/* Customer Avatar Customization Modal */}
       {isAvatarModalOpen && activeLead && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             inset: 0,
@@ -3649,7 +3652,7 @@ export default function UnifiedChatCenter({
             if (e.target === e.currentTarget) setIsAvatarModalOpen(false);
           }}
         >
-          <div 
+          <div
             style={{
               backgroundColor: '#ffffff',
               borderRadius: '16px',
@@ -3740,12 +3743,12 @@ export default function UnifiedChatCenter({
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>
                   📤 1. อัปโหลดรูปภาพจากอุปกรณ์
                 </label>
-                <input 
-                  type="file" 
-                  ref={avatarFileInputRef} 
-                  accept="image/*" 
-                  onChange={handleAvatarFileUpload} 
-                  style={{ display: 'none' }} 
+                <input
+                  type="file"
+                  ref={avatarFileInputRef}
+                  accept="image/*"
+                  onChange={handleAvatarFileUpload}
+                  style={{ display: 'none' }}
                 />
                 <button
                   onClick={() => avatarFileInputRef.current?.click()}
@@ -3810,10 +3813,10 @@ export default function UnifiedChatCenter({
                       onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
                       onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                     >
-                      <img 
-                        src={url} 
-                        alt={`Preset ${idx + 1}`} 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} 
+                      <img
+                        src={url}
+                        alt={`Preset ${idx + 1}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       />
                     </button>
                   ))}
