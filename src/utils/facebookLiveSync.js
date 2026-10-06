@@ -110,7 +110,7 @@ export function formatConversationTime(lead) {
 
 export async function fetchLiveFacebookConversations(pageId, pageToken, pageName) {
   try {
-    const url = `https://graph.facebook.com/v19.0/${pageId}/conversations?fields=id,snippet,updated_time,unread_count,senders&access_token=${encodeURIComponent(pageToken)}`;
+    const url = `https://graph.facebook.com/v19.0/${pageId}/conversations?fields=id,snippet,updated_time,unread_count,senders{id,name,email,picture}&access_token=${encodeURIComponent(pageToken)}`;
     const res = await fetch(url);
     const data = await res.json();
 
@@ -131,6 +131,7 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
           ? customerSender.name.trim() 
           : `ลูกค้า Facebook #${conv.id ? conv.id.slice(-4) : 'Inbox'}`;
         const customerEmail = customerSender?.email || '';
+        const customerAvatar = customerSender?.picture?.data?.url || null;
 
         // Try fetching conversation messages with attachments
         let messageList = [];
@@ -234,6 +235,7 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
           tag: 'ลูกค้าเพจจริง',
           convId: conv.id,
           customerPsid: customerSender?.id || null,
+          avatar: customerAvatar || null,
           activePageToken: pageToken,
           messages: messageList
         };

@@ -18,7 +18,7 @@ import {
   MoreVertical,
   SlidersHorizontal
 } from 'lucide-react';
-import { getPageTheme } from './UnifiedChatCenter';
+import { getPageTheme, CustomerAvatar } from './UnifiedChatCenter';
 
 export const isFollowUpDue = (followUpDate) => {
   if (!followUpDate) return false;
@@ -601,10 +601,13 @@ export default function SalesPipelineKanban({
                           e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.04)';
                         }}
                       >
-                        {/* Top: Customer Name & Page Badge */}
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '6px' }}>
-                          <div style={{ fontWeight: '800', fontSize: '0.86rem', color: '#0f172a', lineHeight: '1.2' }}>
-                            {lead.name}
+                        {/* Top: Customer Avatar, Name & Page Badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                            <CustomerAvatar lead={lead} size={28} border="1px solid #e2e8f0" />
+                            <div style={{ fontWeight: '800', fontSize: '0.86rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {lead.name}
+                            </div>
                           </div>
                           <span style={{
                             fontSize: '0.66rem',
@@ -613,7 +616,8 @@ export default function SalesPipelineKanban({
                             borderRadius: '4px',
                             backgroundColor: theme.badgeBg || '#f1f5f9',
                             color: theme.darkText || '#334155',
-                            whiteSpace: 'nowrap'
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
                           }}>
                             {theme.icon} {theme.shortName}
                           </span>

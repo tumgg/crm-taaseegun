@@ -13,6 +13,7 @@ export function mapDbToLead(row) {
   return {
     id: String(row.id),
     name: row.name || 'ลูกค้า',
+    avatar: row.avatar || null,
     platform: row.platform || 'facebook',
     channel: row.channel || '',
     channelName: row.channel_name || row.channelName || '',
@@ -48,6 +49,7 @@ export function mapLeadToDb(lead) {
   return {
     id: String(lead.id),
     name: lead.name || 'ลูกค้า',
+    avatar: lead.avatar || null,
     platform: lead.platform || 'facebook',
     channel: lead.channel || '',
     channel_name: lead.channelName || '',

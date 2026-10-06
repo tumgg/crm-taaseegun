@@ -25,6 +25,7 @@ import {
   Send
 } from 'lucide-react';
 import { leadStatusOptions, interactionTypeOptions } from '../data/mockData';
+import { CustomerAvatar } from './UnifiedChatCenter';
 
 export default function LeadManagementCrm({ 
   leads, 
@@ -590,11 +591,16 @@ export default function LeadManagementCrm({
                     >
                       {/* Customer Name & Date */}
                       <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
-                        <div style={{ fontWeight: '700', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{lead.name}</span>
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px' }}>
-                          📅 {lead.date}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <CustomerAvatar lead={lead} size={36} border="1px solid #e2e8f0" />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {lead.name}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '1px' }}>
+                              📅 {lead.date}
+                            </div>
+                          </div>
                         </div>
                         <div style={{ marginTop: '6px' }}>
                           {renderChannelBadge(lead)}

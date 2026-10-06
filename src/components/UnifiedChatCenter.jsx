@@ -68,6 +68,30 @@ import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
 import SavedRepliesModal from './SavedRepliesModal';
 
+export const PRESET_AVATARS = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80'
+];
+
+export function getLeadAvatarUrl(lead) {
+  if (!lead) return null;
+  if (lead.avatar && typeof lead.avatar === 'string' && lead.avatar.trim()) {
+    return lead.avatar.trim();
+  }
+  if (lead.profilePic || lead.profile_pic) {
+    return lead.profilePic || lead.profile_pic;
+  }
+  const seed = lead.customerPsid || lead.id || lead.name;
+  if (!seed) return null;
+  return `https://i.pravatar.cc/150?u=${encodeURIComponent(seed)}`;
+}
+
 export function getInitials(name) {
   if (!name) return 'ลูก';
   const parts = name.trim().split(' ');
@@ -90,6 +114,112 @@ export function getAvatarBg(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
   return colors[hash % colors.length];
+}
+
+export function CustomerAvatar({
+  lead,
+  size = 40,
+  border,
+  style = {},
+  showStatusBadge = false,
+  isReplied = true
+}) {
+  const [imgError, setImgError] = useState(false);
+  const avatarUrl = getLeadAvatarUrl(lead);
+  const av = getAvatarBg(lead?.name);
+  const initials = getInitials(lead?.name);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
+
+  const effectiveBorder = border !== undefined 
+    ? border 
+    : (!isReplied ? '2px solid #f87171' : `1px solid ${av.border}`);
+
+  return (
+    <div style={{ position: 'relative', width: `${size}px`, height: `${size}px`, flexShrink: 0, ...style }}>
+      {avatarUrl && !imgError ? (
+        <img
+          src={avatarUrl}
+          alt={lead?.name || 'ลูกค้า'}
+          loading="lazy"
+          onError={() => setImgError(true)}
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            borderRadius: '50%',
+            objectFit: 'cover',
+            border: effectiveBorder,
+            backgroundColor: av.bg,
+            display: 'block'
+          }}
+        />
+      ) : (
+        <div style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          borderRadius: '50%',
+          backgroundColor: av.bg,
+          color: av.text,
+          border: effectiveBorder,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontWeight: '800',
+          fontSize: size > 48 ? '1.2rem' : (size >= 38 ? '0.82rem' : '0.72rem'),
+          userSelect: 'none'
+        }}>
+          {initials}
+        </div>
+      )}
+
+      {/* Instant Signal: Red dot if Unreplied, Green check if Replied */}
+      {showStatusBadge && (
+        !isReplied ? (
+          <span 
+            style={{
+              position: 'absolute',
+              top: '-2px',
+              right: '-2px',
+              width: '13px',
+              height: '13px',
+              borderRadius: '50%',
+              backgroundColor: '#ef4444',
+              border: '2px solid #ffffff',
+              boxShadow: '0 0 0 1px #dc2626',
+              zIndex: 2
+            }} 
+            title="รอแอดมินตอบกลับ (ยังไม่ตอบ)"
+          />
+        ) : (
+          <span 
+            style={{
+              position: 'absolute',
+              bottom: '-2px',
+              right: '-2px',
+              width: '15px',
+              height: '15px',
+              borderRadius: '50%',
+              backgroundColor: '#16a34a',
+              color: '#ffffff',
+              border: '2px solid #ffffff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.6rem',
+              fontWeight: '900',
+              zIndex: 2
+            }} 
+            title="แอดมินตอบลูกค้าแล้ว"
+          >
+            ✓
+          </span>
+        )
+      )}
+    </div>
+  );
 }
 
 export function getPageTheme(channelId) {
@@ -199,6 +329,11 @@ export default function UnifiedChatCenter({
   const [selectedImageModal, setSelectedImageModal] = useState(null); // { url, name, date, sender }
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+
+  // Customer Avatar Customization State & Ref
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [customAvatarUrlInput, setCustomAvatarUrlInput] = useState('');
+  const avatarFileInputRef = useRef(null);
 
   // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
@@ -1012,6 +1147,46 @@ export default function UnifiedChatCenter({
     setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, [field]: value } : l));
   };
 
+  // Client-side customer avatar photo upload with lightweight compression
+  const handleAvatarFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeLead) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 320;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        handleUpdateLeadField('avatar', dataUrl);
+        setToastNotification(`📷 อัปเดตรูปโปรไฟล์ของ "${activeLead.name}" เรียบร้อยแล้ว`);
+        setTimeout(() => setToastNotification(null), 3000);
+        setIsAvatarModalOpen(false);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   // Simulate incoming live customer message / comment (DEMO LIVE TEST)
   const handleSimulateIncomingMessage = () => {
     const mockInbounds = [
@@ -1690,70 +1865,13 @@ export default function UnifiedChatCenter({
                       }
                     }}
                   >
-                    {/* Customer Friendly Avatar Circle with Reply Status Badge */}
-                    {(() => {
-                      const av = getAvatarBg(lead.name);
-                      return (
-                        <div style={{ position: 'relative', flexShrink: 0 }}>
-                          <div style={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            backgroundColor: av.bg,
-                            color: av.text,
-                            border: !isReplied ? '2px solid #f87171' : `1px solid ${av.border}`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: '800',
-                            fontSize: '0.82rem'
-                          }}>
-                            {getInitials(lead.name)}
-                          </div>
-
-                          {/* Instant Signal: Red dot if Unreplied, Green check if Replied */}
-                          {!isReplied ? (
-                            <span 
-                              style={{
-                                position: 'absolute',
-                                top: '-2px',
-                                right: '-2px',
-                                width: '13px',
-                                height: '13px',
-                                borderRadius: '50%',
-                                backgroundColor: '#ef4444',
-                                border: '2px solid #ffffff',
-                                boxShadow: '0 0 0 1px #dc2626'
-                              }} 
-                              title="รอแอดมินตอบกลับ (ยังไม่ตอบ)"
-                            />
-                          ) : (
-                            <span 
-                              style={{
-                                position: 'absolute',
-                                bottom: '-2px',
-                                right: '-2px',
-                                width: '15px',
-                                height: '15px',
-                                borderRadius: '50%',
-                                backgroundColor: '#16a34a',
-                                color: '#ffffff',
-                                border: '2px solid #ffffff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.6rem',
-                                fontWeight: '900',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
-                              }} 
-                              title="แอดมินตอบลูกค้าแล้ว"
-                            >
-                              ✓
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {/* Customer Photo Avatar with Reply Status Badge */}
+                    <CustomerAvatar
+                      lead={lead}
+                      size={40}
+                      showStatusBadge={true}
+                      isReplied={isReplied}
+                    />
 
                     {/* Card Content */}
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -1934,28 +2052,20 @@ export default function UnifiedChatCenter({
                     </button>
                   )}
 
-                  {/* Active Customer Avatar */}
-                  {(() => {
-                    const av = getAvatarBg(activeLead.name);
-                    return (
-                      <div style={{
-                        width: '38px',
-                        height: '38px',
-                        borderRadius: '50%',
-                        backgroundColor: av.bg,
-                        color: av.text,
-                        border: `1px solid ${av.border}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '800',
-                        fontSize: '0.85rem',
-                        flexShrink: 0
-                      }}>
-                        {getInitials(activeLead.name)}
-                      </div>
-                    );
-                  })()}
+                  {/* Active Customer Avatar (Clickable to change profile pic) */}
+                  <div
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    title="คลิกเพื่อดูหรือเปลี่ยนรูปโปรไฟล์ลูกค้า"
+                    style={{ cursor: 'pointer', flexShrink: 0, transition: 'transform 0.15s ease' }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.06)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    <CustomerAvatar
+                      lead={activeLead}
+                      size={40}
+                      border="1.5px solid #cbd5e1"
+                    />
+                  </div>
 
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -3134,9 +3244,84 @@ export default function UnifiedChatCenter({
 
               {/* Customer Profile */}
               <div>
-                <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
-                  ข้อมูลลูกค้า
-                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', margin: 0 }}>
+                    ข้อมูลลูกค้า
+                  </h4>
+                  <button
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      backgroundColor: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: '6px',
+                      color: '#1d4ed8',
+                      fontSize: '0.72rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                    title="เปลี่ยนหรืออัปโหลดรูปโปรไฟล์ลูกค้า"
+                  >
+                    <Camera size={12} /> เปลี่ยนรูปโปรไฟล์
+                  </button>
+                </div>
+
+                {/* Profile Card with Photo */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  marginBottom: '10px'
+                }}>
+                  <div
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+                    title="คลิกเพื่อเปลี่ยนรูปโปรไฟล์"
+                  >
+                    <CustomerAvatar 
+                      lead={activeLead} 
+                      size={54} 
+                      border="2px solid #ffffff" 
+                      style={{ boxShadow: '0 2px 5px rgba(0,0,0,0.08)' }} 
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      bottom: '-2px',
+                      right: '-2px',
+                      backgroundColor: '#2563eb',
+                      color: '#ffffff',
+                      borderRadius: '50%',
+                      width: '18px',
+                      height: '18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '2px solid #ffffff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                    }}>
+                      <Camera size={10} />
+                    </span>
+                  </div>
+
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {activeLead.name}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                      {activeLead.avatar ? '🟢 รูปโปรไฟล์กำหนดเอง' : '🔵 รูปโปรไฟล์อัตโนมัติ'}
+                    </div>
+                  </div>
+                </div>
 
                 <div style={{
                   padding: '5px 8px',
@@ -3156,19 +3341,16 @@ export default function UnifiedChatCenter({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                    <User size={14} color="#64748b" />
-                    <strong>{activeLead.name}</strong>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
                     <Phone size={14} color="#64748b" />
-                    <span>{activeLead.contact}</span>
+                    <span>{activeLead.contact || 'Facebook Messenger'}</span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                    <Tag size={14} color="#64748b" />
-                    <span>{activeLead.tag}</span>
-                  </div>
+                  {activeLead.tag && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
+                      <Tag size={14} color="#64748b" />
+                      <span>{activeLead.tag}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3282,6 +3464,35 @@ export default function UnifiedChatCenter({
               <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>• {selectedImageModal.date}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {activeLead && (
+                <button
+                  onClick={() => {
+                    handleUpdateLeadField('avatar', selectedImageModal.url);
+                    setToastNotification(`📷 ตั้งรูปภาพนี้เป็นรูปโปรไฟล์ของ "${activeLead.name}" เรียบร้อยแล้ว`);
+                    setTimeout(() => setToastNotification(null), 3000);
+                    setSelectedImageModal(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: '#2563eb',
+                    color: '#ffffff',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                  title="ใช้รูปนี้เป็นรูปโปรไฟล์ของลูกค้าคนนี้"
+                >
+                  <Camera size={14} /> ตั้งเป็นรูปโปรไฟล์ลูกค้า
+                </button>
+              )}
               <a
                 href={selectedImageModal.url}
                 target="_blank"
@@ -3370,6 +3581,269 @@ export default function UnifiedChatCenter({
         onClose={() => setIsSavedRepliesOpen(false)}
         onSelectReply={handleSelectSavedReply}
       />
+
+      {/* Customer Avatar Customization Modal */}
+      {isAvatarModalOpen && activeLead && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '16px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAvatarModalOpen(false);
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#f8fafc'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Camera size={18} color="#2563eb" />
+                <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '800', color: '#0f172a' }}>
+                  เปลี่ยนรูปโปรไฟล์ลูกค้า
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsAvatarModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '6px'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px', maxHeight: '78vh', overflowY: 'auto' }}>
+              {/* Current Avatar Preview */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '12px 16px',
+                backgroundColor: '#f1f5f9',
+                borderRadius: '12px',
+                marginBottom: '20px'
+              }}>
+                <CustomerAvatar lead={activeLead} size={64} border="3px solid #ffffff" style={{ boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+                <div>
+                  <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#0f172a' }}>
+                    {activeLead.name}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                    {activeLead.avatar ? '🟢 ใช้รูปภาพโปรไฟล์ที่กำหนดเอง' : '🔵 ใช้รูปภาพอัตโนมัติประจำตัว'}
+                  </div>
+                  {activeLead.avatar && (
+                    <button
+                      onClick={() => {
+                        handleUpdateLeadField('avatar', null);
+                        setToastNotification(`รีเซ็ตรูปโปรไฟล์ของ "${activeLead.name}" เป็นค่าเริ่มต้นแล้ว`);
+                        setTimeout(() => setToastNotification(null), 3000);
+                        setIsAvatarModalOpen(false);
+                      }}
+                      style={{
+                        marginTop: '6px',
+                        padding: '3px 8px',
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        color: '#ef4444',
+                        background: '#fee2e2',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ล้างรูป / กลับเป็นค่าเริ่มต้น
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Action 1: Upload from Device */}
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>
+                  📤 1. อัปโหลดรูปภาพจากอุปกรณ์
+                </label>
+                <input 
+                  type="file" 
+                  ref={avatarFileInputRef} 
+                  accept="image/*" 
+                  onChange={handleAvatarFileUpload} 
+                  style={{ display: 'none' }} 
+                />
+                <button
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    backgroundColor: '#ffffff',
+                    border: '2px dashed #93c5fd',
+                    borderRadius: '10px',
+                    color: '#2563eb',
+                    fontWeight: '700',
+                    fontSize: '0.86rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#eff6ff';
+                    e.currentTarget.style.borderColor = '#3b82f6';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = '#ffffff';
+                    e.currentTarget.style.borderColor = '#93c5fd';
+                  }}
+                >
+                  <Camera size={16} /> เลือกรูปภาพจากคอม/มือถือ (ย่อขนาดอัตโนมัติ)
+                </button>
+              </div>
+
+              {/* Action 2: Preset Avatar Gallery */}
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>
+                  ✨ 2. เลือกจากคลังรูปโปรไฟล์สำเร็จรูป
+                </label>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '10px'
+                }}>
+                  {PRESET_AVATARS.map((url, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        handleUpdateLeadField('avatar', url);
+                        setToastNotification(`📷 เปลี่ยนรูปโปรไฟล์ของ "${activeLead.name}" เรียบร้อยแล้ว`);
+                        setTimeout(() => setToastNotification(null), 3000);
+                        setIsAvatarModalOpen(false);
+                      }}
+                      style={{
+                        padding: 0,
+                        border: activeLead.avatar === url ? '3px solid #2563eb' : '2px solid transparent',
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        aspectRatio: '1/1',
+                        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
+                      onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      <img 
+                        src={url} 
+                        alt={`Preset ${idx + 1}`} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} 
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action 3: Direct URL */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>
+                  🔗 3. วางลิงก์รูปภาพ (Direct Image URL)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="url"
+                    placeholder="https://example.com/avatar.jpg"
+                    value={customAvatarUrlInput}
+                    onChange={(e) => setCustomAvatarUrlInput(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.82rem',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!customAvatarUrlInput.trim()) return;
+                      handleUpdateLeadField('avatar', customAvatarUrlInput.trim());
+                      setToastNotification(`📷 อัปเดตรูปโปรไฟล์ของ "${activeLead.name}" เรียบร้อยแล้ว`);
+                      setTimeout(() => setToastNotification(null), 3000);
+                      setCustomAvatarUrlInput('');
+                      setIsAvatarModalOpen(false);
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      backgroundColor: '#2563eb',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '700',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    บันทึก
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '12px 20px',
+              backgroundColor: '#f8fafc',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setIsAvatarModalOpen(false)}
+                style={{
+                  padding: '7px 16px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  color: '#475569',
+                  fontWeight: '700',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
