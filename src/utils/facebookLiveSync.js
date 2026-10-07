@@ -133,11 +133,22 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
         const customerEmail = customerSender?.email || '';
         const customerAvatar = customerSender?.picture?.data?.url || null;
 
-        // Try fetching conversation messages with attachments
+        // Try fetching conversation messages with attachments and reply_to quotes
         let messageList = [];
         try {
-          const msgRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=id,message,created_time,from,attachments{id,mime_type,name,size,image_data,video_data,file_url}&access_token=${encodeURIComponent(pageToken)}`);
-          const msgData = await msgRes.json();
+          let msgData = null;
+          try {
+            const msgRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=id,message,created_time,from,reply_to,attachments{id,mime_type,name,size,image_data,video_data,file_url}&access_token=${encodeURIComponent(pageToken)}`);
+            msgData = await msgRes.json();
+          } catch (fetchErr) {
+            console.warn('Initial fetch with reply_to failed, retrying without reply_to:', fetchErr);
+          }
+
+          if (!msgData || msgData.error) {
+            const fallbackRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=id,message,created_time,from,attachments{id,mime_type,name,size,image_data,video_data,file_url}&access_token=${encodeURIComponent(pageToken)}`);
+            msgData = await fallbackRes.json();
+          }
+
           if (msgData.data && Array.isArray(msgData.data)) {
             // Reverse so oldest is first
             messageList = msgData.data.reverse().map(m => {
@@ -164,6 +175,19 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
                 text = '(ข้อความว่าง)';
               }
 
+              // Extract reply_to info from Facebook Messenger payload if present
+              let parsedReplyTo = null;
+              if (m.reply_to) {
+                const targetMid = m.reply_to.mid || m.reply_to.id || (typeof m.reply_to === 'string' ? m.reply_to : null);
+                parsedReplyTo = {
+                  id: targetMid,
+                  mid: targetMid,
+                  text: m.reply_to.message || m.reply_to.text || '',
+                  sender: m.reply_to.from?.id === pageId ? 'admin' : 'lead',
+                  name: m.reply_to.from?.id === pageId ? (pageName || 'คุณ (แอดมิน)') : customerName
+                };
+              }
+
               return {
                 id: m.id || `msg-${Date.now()}-${Math.random()}`,
                 sender: isFromPage ? 'admin' : 'lead',
@@ -172,8 +196,24 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
                 attachments: parsedAttachments,
                 time: timeStr,
                 created_time: m.created_time,
-                timestamp: m.created_time ? new Date(m.created_time).getTime() : Date.now()
+                timestamp: m.created_time ? new Date(m.created_time).getTime() : Date.now(),
+                replyTo: parsedReplyTo
               };
+            });
+
+            // Post-process to resolve any replyTo against the messages in this thread
+            messageList.forEach(item => {
+              if (item.replyTo) {
+                const ref = messageList.find(target => target.id === item.replyTo.id || target.id === item.replyTo.mid);
+                if (ref) {
+                  if (!item.replyTo.text || item.replyTo.text === '') {
+                    item.replyTo.text = ref.text;
+                  }
+                  item.replyTo.sender = ref.sender;
+                  item.replyTo.name = ref.sender === 'admin' ? (ref.adminName || 'คุณ (แอดมิน)') : customerName;
+                  item.replyTo.attachments = ref.attachments;
+                }
+              }
             });
           }
         } catch (err) {
@@ -304,21 +344,46 @@ export function normalizeAttachment(att) {
   };
 }
 
-export async function sendFacebookMessengerReply(pageToken, recipientPsid, messageText) {
+export async function sendFacebookMessengerReply(pageToken, recipientPsid, messageText, replyToMid = null) {
   try {
     const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
-    const res = await fetch(url, {
+    const messagePayload = { text: messageText };
+
+    // If replying to a specific Facebook message ID, include reply_to
+    if (replyToMid && typeof replyToMid === 'string' && !replyToMid.startsWith('msg-') && !replyToMid.startsWith('att-')) {
+      messagePayload.reply_to = { mid: replyToMid };
+    }
+
+    let res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         recipient: { id: recipientPsid },
-        message: { text: messageText },
+        message: messagePayload,
         messaging_type: 'RESPONSE'
       })
     });
-    const data = await res.json();
+    let data = await res.json();
+
+    // Fallback: If Facebook returns an error specifically because of reply_to, retry sending as standard message
+    if (data.error && messagePayload.reply_to) {
+      console.warn('Facebook reply_to rejected, retrying without reply_to:', data.error);
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          recipient: { id: recipientPsid },
+          message: { text: messageText },
+          messaging_type: 'RESPONSE'
+        })
+      });
+      data = await res.json();
+    }
+
     if (data.error) {
       throw new Error(data.error.message || 'ไม่สามารถส่งข้อความผ่าน Facebook API ได้');
     }

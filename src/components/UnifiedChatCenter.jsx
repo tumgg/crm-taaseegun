@@ -20,6 +20,7 @@ import {
   DollarSign,
   AlertCircle,
   CornerDownRight,
+  Reply,
   ShieldCheck,
   ChevronRight,
   Filter,
@@ -352,6 +353,10 @@ export default function UnifiedChatCenter({
   // AI TL;DR Summary & Follow-Up UI States
   const [isAiSummaryExpanded, setIsAiSummaryExpanded] = useState(false);
   const [dismissedFollowUps, setDismissedFollowUps] = useState({});
+
+  // Message Reply & Quoting State
+  const [replyingToMessage, setReplyingToMessage] = useState(null); // { id, mid, sender, name, text, attachments, time }
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
 
   // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
@@ -954,6 +959,11 @@ export default function UnifiedChatCenter({
     }
   }, [activeLead?.messages, activeLead?.id]);
 
+  // Reset quoting/reply state when switching active conversations
+  useEffect(() => {
+    setReplyingToMessage(null);
+  }, [activeLead?.id]);
+
   // Auto-expand chat input textarea to show 4-5 lines comfortably and adjust smoothly
   useEffect(() => {
     if (chatInputRef.current) {
@@ -1034,6 +1044,42 @@ export default function UnifiedChatCenter({
     setDismissedFollowUps(prev => ({ ...prev, [leadId]: true }));
   };
 
+  // Reply & Quoting Action Handlers
+  const handleStartReply = (msg) => {
+    if (!msg) return;
+    setReplyingToMessage({
+      id: msg.id,
+      mid: msg.mid || msg.id,
+      sender: msg.sender,
+      name: msg.sender === 'admin' ? (msg.adminName || 'คุณ (แอดมิน)') : activeLead.name,
+      text: msg.text || (msg.attachments?.length > 0 ? (msg.attachments[0].type === 'image' ? '🖼️ รูปภาพ' : '📎 ไฟล์แนบ') : 'ข้อความ'),
+      attachments: msg.attachments || [],
+      time: msg.time
+    });
+    if (chatInputRef.current) {
+      chatInputRef.current.focus();
+    }
+  };
+
+  const handleCancelReply = () => {
+    setReplyingToMessage(null);
+  };
+
+  const handleScrollToMessage = (targetMsgId) => {
+    if (!targetMsgId) return;
+    const el = document.getElementById(`msg-bubble-${targetMsgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.transition = 'transform 0.25s ease, box-shadow 0.25s ease';
+      el.style.transform = 'scale(1.03)';
+      el.style.boxShadow = '0 0 0 3px #3b82f6';
+      setTimeout(() => {
+        el.style.transform = 'scale(1.0)';
+        el.style.boxShadow = 'none';
+      }, 1400);
+    }
+  };
+
   // Handle Send Message & Attachments (Supports Multiple Photos/Files)
   const handleSendMessage = async (e) => {
     e?.preventDefault();
@@ -1059,6 +1105,15 @@ export default function UnifiedChatCenter({
         : `🖼️ รูปภาพแนบ (${optimisticAttachments.length} รูป)`;
     }
 
+    const replyContext = replyingToMessage ? {
+      id: replyingToMessage.id,
+      mid: replyingToMessage.mid || replyingToMessage.id,
+      sender: replyingToMessage.sender,
+      name: replyingToMessage.name,
+      text: replyingToMessage.text,
+      attachments: replyingToMessage.attachments || []
+    } : null;
+
     const newMessage = {
       id: `msg-${Date.now()}`,
       sender: 'admin',
@@ -1066,7 +1121,8 @@ export default function UnifiedChatCenter({
       attachments: optimisticAttachments,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       adminName: activeAdminName,
-      isCommentReply: replyMode === 'comment'
+      isCommentReply: replyMode === 'comment',
+      replyTo: replyContext
     };
 
     const now = Date.now();
@@ -1097,6 +1153,7 @@ export default function UnifiedChatCenter({
 
     setLeads(sortLeadsByLatest(updatedLeads));
     setReplyText('');
+    setReplyingToMessage(null);
     handleClearAllAttachments();
 
     // If real live Facebook lead, deliver each attachment via Facebook Graph API
@@ -1140,14 +1197,14 @@ export default function UnifiedChatCenter({
             }
             // If admin also entered text, send text message as well
             if (messageTextToSend) {
-              await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
+              await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
             }
             const successLabel = isAllImages
               ? `รูปภาพ ${filesToSend.length} รูป`
               : `ไฟล์แนบ ${filesToSend.length} รายการ`;
             setToastNotification(`✅ ส่ง${successLabel}ตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
           } else {
-            await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend);
+            await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
             setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
           }
         }
@@ -2618,48 +2675,136 @@ export default function UnifiedChatCenter({
 
                 {(activeLead.messages || []).map((msg, idx) => {
                   const isAdmin = msg.sender === 'admin';
+                  const msgKey = msg.id || `msg-idx-${idx}`;
+                  const isHovered = hoveredMessageId === msgKey;
+
                   return (
                     <div
-                      key={msg.id || idx}
+                      key={msgKey}
+                      id={`msg-bubble-${msgKey}`}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: isAdmin ? 'flex-end' : 'flex-start'
+                        alignItems: isAdmin ? 'flex-end' : 'flex-start',
+                        position: 'relative',
+                        margin: '3px 0'
                       }}
+                      onMouseEnter={() => setHoveredMessageId(msgKey)}
+                      onMouseLeave={() => setHoveredMessageId(null)}
                     >
                       <div style={{
-                        backgroundColor: isAdmin ? activeTheme.primary : '#ffffff',
-                        color: isAdmin ? '#ffffff' : '#1e293b',
-                        border: isAdmin ? 'none' : '1px solid #e2e8f0',
-                        borderRadius: isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                        padding: '11px 15px',
-                        maxWidth: '75%',
-                        boxShadow: 'var(--shadow-sm)'
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexDirection: isAdmin ? 'row-reverse' : 'row',
+                        maxWidth: '85%'
                       }}>
-                        {/* Clean sender label - only show if human agent or customer */}
-                        {(!isAdmin || (msg.adminName && !msg.adminName.includes('Good Vibes') && !msg.adminName.includes('ทาสีกัน') && !msg.adminName.includes('RoomsPainting') && !msg.adminName.includes('ช่างหมี') && msg.adminName !== 'แอดมินเพจ')) && (
-                          <div style={{
-                            fontSize: '0.7rem',
-                            fontWeight: '700',
-                            color: isAdmin ? 'rgba(255,255,255,0.85)' : '#64748b',
-                            marginBottom: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}>
-                            <span>{isAdmin ? `👤 ${msg.adminName}` : activeLead.name}</span>
-                            {msg.isComment && (
-                              <span style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
-                                จากคอมเมนต์
-                              </span>
-                            )}
-                            {msg.isCommentReply && (
-                              <span style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
-                                ตอบใต้คอมเมนต์
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        {/* The Message Bubble */}
+                        <div
+                          onDoubleClick={() => handleStartReply(msg)}
+                          style={{
+                            backgroundColor: isAdmin ? activeTheme.primary : '#ffffff',
+                            color: isAdmin ? '#ffffff' : '#1e293b',
+                            border: isAdmin ? 'none' : '1px solid #e2e8f0',
+                            borderRadius: isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
+                            padding: '11px 15px',
+                            boxShadow: 'var(--shadow-sm)',
+                            position: 'relative'
+                          }}
+                        >
+                          {/* Clean sender label - only show if human agent or customer */}
+                          {(!isAdmin || (msg.adminName && !msg.adminName.includes('Good Vibes') && !msg.adminName.includes('ทาสีกัน') && !msg.adminName.includes('RoomsPainting') && !msg.adminName.includes('ช่างหมี') && msg.adminName !== 'แอดมินเพจ')) && (
+                            <div style={{
+                              fontSize: '0.7rem',
+                              fontWeight: '700',
+                              color: isAdmin ? 'rgba(255,255,255,0.85)' : '#64748b',
+                              marginBottom: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}>
+                              <span>{isAdmin ? `👤 ${msg.adminName}` : activeLead.name}</span>
+                              {msg.isComment && (
+                                <span style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
+                                  จากคอมเมนต์
+                                </span>
+                              )}
+                              {msg.isCommentReply && (
+                                <span style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>
+                                  ตอบใต้คอมเมนต์
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Quoted / Replied Message Box */}
+                          {msg.replyTo && (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleScrollToMessage(msg.replyTo.id || msg.replyTo.mid);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '6px 10px',
+                                marginBottom: '8px',
+                                borderRadius: '8px',
+                                backgroundColor: isAdmin ? 'rgba(0, 0, 0, 0.18)' : '#f1f5f9',
+                                borderLeft: `3.5px solid ${isAdmin ? '#ffffff' : activeTheme.primary}`,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseOver={(e) => e.currentTarget.style.opacity = '0.85'}
+                              onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+                              title="คลิกเพื่อเลื่อนไปยังข้อความต้นฉบับ"
+                            >
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: '800',
+                                  color: isAdmin ? '#ffffff' : activeTheme.primary,
+                                  marginBottom: '2px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  <CornerDownRight size={11} strokeWidth={2.5} />
+                                  <span>
+                                    {msg.replyTo.sender === 'admin' ? (msg.replyTo.name || 'คุณ (แอดมิน)') : (msg.replyTo.name || activeLead.name)}
+                                  </span>
+                                </div>
+                                <div style={{
+                                  fontSize: '0.74rem',
+                                  color: isAdmin ? 'rgba(255, 255, 255, 0.92)' : '#475569',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  lineHeight: '1.3'
+                                }}>
+                                  {msg.replyTo.text || (msg.replyTo.attachments?.length > 0 ? (msg.replyTo.attachments[0].type === 'image' ? '🖼️ รูปภาพ' : '📎 ไฟล์แนบ') : 'ข้อความ')}
+                                </div>
+                              </div>
+                              {/* Thumbnail preview if replied to image */}
+                              {msg.replyTo.attachments?.some(a => a.type === 'image') && (
+                                <div style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '4px',
+                                  overflow: 'hidden',
+                                  flexShrink: 0,
+                                  backgroundColor: '#000000'
+                                }}>
+                                  <img
+                                    src={msg.replyTo.attachments.find(a => a.type === 'image')?.previewUrl || msg.replyTo.attachments.find(a => a.type === 'image')?.url}
+                                    alt="thumb"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                         {/* Render Attachments (Images, Stickers, Videos, Documents) */}
                         {msg.attachments && msg.attachments.length > 0 && (() => {
@@ -2891,9 +3036,50 @@ export default function UnifiedChatCenter({
                           {isAdmin && <CheckCheck size={12} />}
                         </div>
                       </div>
+
+                      {/* Hover Action Buttons (Reply) */}
+                      <div style={{
+                        opacity: hoveredMessageId === msgKey ? 1 : 0,
+                        pointerEvents: hoveredMessageId === msgKey ? 'auto' : 'none',
+                        transition: 'opacity 0.15s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => handleStartReply(msg)}
+                          title="ตอบกลับข้อความนี้ (หรือดับเบิลคลิกที่ข้อความ)"
+                          style={{
+                            border: 'none',
+                            backgroundColor: '#f1f5f9',
+                            color: '#64748b',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = activeTheme.primary;
+                            e.currentTarget.style.color = '#ffffff';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f1f5f9';
+                            e.currentTarget.style.color = '#64748b';
+                          }}
+                        >
+                          <Reply size={14} />
+                        </button>
+                      </div>
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
               </div>
 
               {/* AI Suggestion Bar & Quick Reply Bar */}
@@ -3017,6 +3203,66 @@ export default function UnifiedChatCenter({
                 flexShrink: 0,
                 boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
               }}>
+                {/* Replying / Quoting Message Banner */}
+                {replyingToMessage && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '7px 12px',
+                    backgroundColor: '#eff6ff',
+                    borderLeft: '4px solid #1877f2',
+                    borderRadius: '8px',
+                    border: '1px solid #bfdbfe',
+                    animation: 'fadeIn 0.15s ease-out'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                      <CornerDownRight size={15} color="#1877f2" />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#1877f2', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span>กำลังตอบกลับ:</span>
+                          <span style={{ color: '#0f172a' }}>{replyingToMessage.name}</span>
+                        </div>
+                        <div style={{
+                          fontSize: '0.75rem',
+                          color: '#334155',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {replyingToMessage.text}
+                        </div>
+                      </div>
+                      {replyingToMessage.attachments?.some(a => a.type === 'image') && (
+                        <div style={{ width: '30px', height: '30px', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, backgroundColor: '#000' }}>
+                          <img
+                            src={replyingToMessage.attachments.find(a => a.type === 'image')?.previewUrl || replyingToMessage.attachments.find(a => a.type === 'image')?.url}
+                            alt="reply-thumb"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleCancelReply}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        padding: '3px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="ยกเลิกการตอบกลับ"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
                 {/* Option 4: Smart Follow-Up Reminder & Nudge Banner */}
                 {activeFollowUp?.needsFollowUp && !dismissedFollowUps[activeLead?.id] && (
                   <div style={{
