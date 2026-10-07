@@ -3603,96 +3603,117 @@ export default function UnifiedChatCenter({
             )}
             {activeLead ? (
               <>
-                {/* Follow-up Reminder Module */}
+                {/* Admin Memory / Discussion Notes Card */}
                 <div style={{
-                  backgroundColor: isFollowUpDue(activeLead.followUpDate) ? '#fef2f2' : '#f8fafc',
-                  border: isFollowUpDue(activeLead.followUpDate) ? '1px solid #fecaca' : '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '12px'
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                    <Clock size={16} color={isFollowUpDue(activeLead.followUpDate) ? '#dc2626' : '#64748b'} />
-                    <span style={{ fontSize: '0.82rem', fontWeight: '700', color: isFollowUpDue(activeLead.followUpDate) ? '#b91c1c' : '#1e293b' }}>
-                      ⏰ ติดตามผล (Follow-up)
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FileText size={16} color="#2563eb" />
+                      <span style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0f172a' }}>
+                        📝 บันทึกเตือนความจำแอดมิน
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: '0.66rem',
+                      padding: '2px 7px',
+                      borderRadius: '999px',
+                      backgroundColor: '#f0fdf4',
+                      color: '#16a34a',
+                      fontWeight: '700',
+                      border: '1px solid #bbf7d0',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}>
+                      <Check size={11} strokeWidth={3} /> บันทึกอัตโนมัติ
                     </span>
                   </div>
 
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>
-                    {activeLead.followUpDate ? (
-                      <div>
-                        วันนัดหมาย: <strong>{activeLead.followUpDate}</strong>{' '}
-                        {isFollowUpDue(activeLead.followUpDate) && <span style={{ color: '#dc2626', fontWeight: '800' }}>[ครบกำหนดแล้ว!]</span>}
-                      </div>
-                    ) : (
-                      'ยังไม่ได้ตั้งวันติดตามผล'
-                    )}
+                  <div style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: '1.3' }}>
+                    บันทึกสรุปเรื่องที่เคยคุยไว้ ข้อตกลง หรือรายละเอียดสำคัญของลูกค้ารายนี้
                   </div>
 
-                  {/* Quick Follow-up Buttons */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '8px' }}>
-                    <button
-                      onClick={() => handleSetFollowUpDays(1)}
-                      style={{
-                        padding: '4px 6px',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: '#ffffff',
-                        fontSize: '0.7rem',
-                        fontWeight: '600',
-                        color: '#334155'
-                      }}
-                    >
-                      +1 วัน
-                    </button>
-                    <button
-                      onClick={() => handleSetFollowUpDays(2)}
-                      style={{
-                        padding: '4px 6px',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: '#ffffff',
-                        fontSize: '0.7rem',
-                        fontWeight: '600',
-                        color: '#334155'
-                      }}
-                    >
-                      +2 วัน
-                    </button>
-                    <button
-                      onClick={() => handleSetFollowUpDays(7)}
-                      style={{
-                        padding: '4px 6px',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: '#ffffff',
-                        fontSize: '0.7rem',
-                        fontWeight: '600',
-                        color: '#334155'
-                      }}
-                    >
-                      +1 สัปดาห์
-                    </button>
-                  </div>
-
-                  {/* Send Follow-up template button */}
-                  <button
-                    onClick={() => {
-                      const name = (activeLead.name || 'ลูกค้า').replace(/\(.*?\)/g, '').trim();
-                      setReplyText(`สวัสดีครับคุณ${name} ทางเราขออนุญาตติดตามเรื่องข้อเสนอและเรทการ์ดที่ส่งให้ก่อนหน้านี้ครับ สะดวกพิจารณาหรือมีคำถามตรงไหนเพิ่มเติมไหมครับผม 😊`);
-                    }}
+                  {/* Textarea */}
+                  <textarea
+                    rows={5}
+                    value={activeLead.notes || ''}
+                    onChange={(e) => handleUpdateLeadField('notes', e.target.value)}
+                    placeholder="พิมพ์บันทึกเตือนความจำ เช่น:&#10;• เคยคุยอะไรไว้: สนใจทำผนังเทกเจอร์ 12 ตร.ม.&#10;• นัดหมาย: สะดวกให้ช่างเข้าสำรวจวันเสาร์&#10;• ข้อตกลง: ส่งราคาแล้ว รอลูกค้าปรึกษาครอบครัว..."
                     style={{
                       width: '100%',
-                      padding: '6px 8px',
-                      borderRadius: '6px',
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #93c5fd',
-                      color: '#1d4ed8',
-                      fontSize: '0.73rem',
-                      fontWeight: '700'
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      fontSize: '0.78rem',
+                      fontFamily: 'inherit',
+                      backgroundColor: '#fffdf5',
+                      color: '#0f172a',
+                      lineHeight: '1.45',
+                      resize: 'vertical',
+                      boxSizing: 'border-box'
                     }}
-                  >
-                    💬 ใส่ข้อความทักตามผล
-                  </button>
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#2563eb';
+                      e.target.style.backgroundColor = '#ffffff';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#cbd5e1';
+                      e.target.style.backgroundColor = '#fffdf5';
+                    }}
+                  />
+
+                  {/* Quick Preset Append Chips */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
+                    {[
+                      '📐 นัดวัดหน้างาน',
+                      '💰 ส่งใบเสนอราคาแล้ว',
+                      '🎨 ส่งแคตตาล็อกสีแล้ว',
+                      '⏳ รอลูกค้าคอนเฟิร์มวัน',
+                      '💳 โอนมัดจำแล้ว'
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          const current = (activeLead.notes || '').trim();
+                          const updated = current ? `${current}\n• ${preset}` : `• ${preset}`;
+                          handleUpdateLeadField('notes', updated);
+                        }}
+                        style={{
+                          padding: '2px 7px',
+                          borderRadius: '4px',
+                          border: '1px solid #e2e8f0',
+                          backgroundColor: '#f8fafc',
+                          fontSize: '0.67rem',
+                          color: '#475569',
+                          cursor: 'pointer',
+                          fontWeight: '600'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = '#eff6ff';
+                          e.currentTarget.style.borderColor = '#bfdbfe';
+                          e.currentTarget.style.color = '#1d4ed8';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f8fafc';
+                          e.currentTarget.style.borderColor = '#e2e8f0';
+                          e.currentTarget.style.color = '#475569';
+                        }}
+                        title={`กดเพื่อเพิ่ม "${preset}" ลงในบันทึก`}
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Customer Profile */}
@@ -3885,50 +3906,6 @@ export default function UnifiedChatCenter({
                   </div>
                 )}
 
-                {/* Follow-Up Status in CRM Panel */}
-                {activeFollowUp?.needsFollowUp && (
-                  <div style={{
-                    padding: '10px 12px',
-                    borderRadius: '10px',
-                    backgroundColor: activeFollowUp.urgency === 'high' ? '#fef2f2' : '#fffbeb',
-                    border: activeFollowUp.urgency === 'high' ? '1.5px solid #fca5a5' : '1.5px solid #fde68a'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <Clock size={13} color={activeFollowUp.urgency === 'high' ? '#dc2626' : '#d97706'} />
-                      <span style={{ fontSize: '0.74rem', fontWeight: '800', color: activeFollowUp.urgency === 'high' ? '#991b1b' : '#92400e' }}>
-                        ⏰ ถึงเวลาส่งข้อความตามลูกค้า
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#475569', marginBottom: '8px' }}>
-                      ลูกค้าเงียบไป {activeFollowUp.badgeText} หลังแอดมินตอบล่าสุด
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {activeFollowUp.templates.map(tpl => (
-                        <button
-                          key={tpl.id}
-                          type="button"
-                          onClick={() => handleApplyFollowUpTemplate(tpl.text)}
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            fontSize: '0.70rem',
-                            fontWeight: '600',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            color: '#334155'
-                          }}
-                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-                        >
-                          {tpl.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Deal Value */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
@@ -3974,28 +3951,6 @@ export default function UnifiedChatCenter({
                     <option value="แอดมินโบว์">แอดมินโบว์</option>
                     <option value="ยังไม่ได้มอบหมาย">ยังไม่ได้มอบหมาย</option>
                   </select>
-                </div>
-
-                {/* Internal Notes Notepad */}
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '3px' }}>
-                    โน้ตภายใน (Admin Notes):
-                  </label>
-                  <textarea
-                    rows="4"
-                    value={activeLead.notes || ''}
-                    onChange={(e) => handleUpdateLeadField('notes', e.target.value)}
-                    placeholder="บันทึกข้อตกลง ข้อกำหนด..."
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '0.76rem',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fffbeb'
-                    }}
-                  />
                 </div>
               </>
             ) : null}
