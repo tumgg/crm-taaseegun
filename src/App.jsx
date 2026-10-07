@@ -20,7 +20,7 @@ import {
   REAL_TEXTURE_BEAR_PAGE_ID, 
   REAL_TEXTURE_BEAR_TOKEN
 } from './data/mockData';
-import { fetchLiveFacebookConversations, sortLeadsByLatest } from './utils/facebookLiveSync';
+import { fetchLiveFacebookConversations, sortLeadsByLatest, getReplyQuoteCache, saveReplyQuoteCache } from './utils/facebookLiveSync';
 import { 
   loadStoredLeads, 
   saveStoredLeads, 
@@ -283,8 +283,38 @@ export default function App() {
                 status: oldLead.status || incoming.status,
                 admin: oldLead.admin || incoming.admin,
                 dealValue: oldLead.dealValue || incoming.dealValue,
-                notes: oldLead.notes || incoming.notes,
-                messages: (incoming.messages && incoming.messages.length > 0) ? incoming.messages : oldLead.messages,
+                messages: (() => {
+                  const oldMessages = oldLead.messages || [];
+                  const incomingMessages = incoming.messages || [];
+                  if (incomingMessages.length === 0) return oldMessages;
+
+                  const merged = incomingMessages.map(incMsg => {
+                    const matchingOld = oldMessages.find(old =>
+                      old.id === incMsg.id ||
+                      (old.sender === incMsg.sender && old.text === incMsg.text && (old.time === incMsg.time || Math.abs((old.timestamp || 0) - (incMsg.timestamp || 0)) < 180000))
+                    );
+
+                    const cachedQuote = getReplyQuoteCache(incMsg.id) || getReplyQuoteCache(`${oldLead.id}_${incMsg.text}`);
+                    const preservedReplyTo = incMsg.replyTo || matchingOld?.replyTo || cachedQuote || null;
+
+                    if (preservedReplyTo && incMsg.id) {
+                      saveReplyQuoteCache(incMsg.id, preservedReplyTo);
+                    }
+
+                    return {
+                      ...incMsg,
+                      replyTo: preservedReplyTo,
+                      adminName: incMsg.adminName || matchingOld?.adminName
+                    };
+                  });
+
+                  const recentOptimistic = oldMessages.filter(old =>
+                    typeof old.id === 'string' && old.id.startsWith('msg-') &&
+                    !merged.some(m => m.text === old.text && m.sender === old.sender)
+                  );
+
+                  return [...merged, ...recentOptimistic];
+                })(),
                 timestamp: incoming.timestamp || oldLead.timestamp || (incoming.updatedTime ? new Date(incoming.updatedTime).getTime() : Date.now()),
                 updatedTime: incoming.updatedTime || oldLead.updatedTime
               };

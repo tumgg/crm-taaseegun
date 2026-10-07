@@ -64,6 +64,33 @@ export function sortLeadsByLatest(leads) {
   return [...leads].sort((a, b) => getLeadTimestamp(b) - getLeadTimestamp(a));
 }
 
+// Persistent storage for message reply quotes so quotes are never lost during sync or page refresh
+const REPLY_QUOTES_KEY = 'omnisocial_reply_quotes_map_v1';
+
+export function saveReplyQuoteCache(key, replyToObj) {
+  try {
+    if (!key || !replyToObj) return;
+    const raw = localStorage.getItem(REPLY_QUOTES_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    map[String(key)] = replyToObj;
+    localStorage.setItem(REPLY_QUOTES_KEY, JSON.stringify(map));
+  } catch (e) {
+    console.warn('Failed to save reply quote to cache:', e);
+  }
+}
+
+export function getReplyQuoteCache(key) {
+  try {
+    if (!key) return null;
+    const raw = localStorage.getItem(REPLY_QUOTES_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw);
+    return map[String(key)] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Helper: Format conversation time friendly (e.g., 2 นาทีก่อน, 14:49, เมื่อวาน, 24 ก.ย.)
 export function formatConversationTime(lead) {
   const ts = getLeadTimestamp(lead);
@@ -188,6 +215,14 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
                 };
               }
 
+              // Check persistent reply quote cache if Facebook Graph API didn't return reply_to
+              if (!parsedReplyTo && m.id) {
+                parsedReplyTo = getReplyQuoteCache(m.id) || getReplyQuoteCache(`${conv.id}_${text}`) || null;
+              }
+              if (parsedReplyTo && m.id) {
+                saveReplyQuoteCache(m.id, parsedReplyTo);
+              }
+
               return {
                 id: m.id || `msg-${Date.now()}-${Math.random()}`,
                 sender: isFromPage ? 'admin' : 'lead',
@@ -212,6 +247,9 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
                   item.replyTo.sender = ref.sender;
                   item.replyTo.name = ref.sender === 'admin' ? (ref.adminName || 'คุณ (แอดมิน)') : customerName;
                   item.replyTo.attachments = ref.attachments;
+                }
+                if (item.id) {
+                  saveReplyQuoteCache(item.id, item.replyTo);
                 }
               }
             });
@@ -347,11 +385,15 @@ export function normalizeAttachment(att) {
 export async function sendFacebookMessengerReply(pageToken, recipientPsid, messageText, replyToMid = null) {
   try {
     const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
-    const messagePayload = { text: messageText };
+    const postBody = {
+      recipient: { id: recipientPsid },
+      message: { text: messageText },
+      messaging_type: 'RESPONSE'
+    };
 
-    // If replying to a specific Facebook message ID, include reply_to
+    // In Facebook Send API, reply_to must be at the root of the JSON payload
     if (replyToMid && typeof replyToMid === 'string' && !replyToMid.startsWith('msg-') && !replyToMid.startsWith('att-')) {
-      messagePayload.reply_to = { mid: replyToMid };
+      postBody.reply_to = { mid: replyToMid };
     }
 
     let res = await fetch(url, {
@@ -359,27 +401,20 @@ export async function sendFacebookMessengerReply(pageToken, recipientPsid, messa
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        recipient: { id: recipientPsid },
-        message: messagePayload,
-        messaging_type: 'RESPONSE'
-      })
+      body: JSON.stringify(postBody)
     });
     let data = await res.json();
 
-    // Fallback: If Facebook returns an error specifically because of reply_to, retry sending as standard message
-    if (data.error && messagePayload.reply_to) {
+    // Fallback: If Facebook returns an error specifically because of reply_to, retry sending without reply_to
+    if (data.error && postBody.reply_to) {
       console.warn('Facebook reply_to rejected, retrying without reply_to:', data.error);
+      delete postBody.reply_to;
       res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          recipient: { id: recipientPsid },
-          message: { text: messageText },
-          messaging_type: 'RESPONSE'
-        })
+        body: JSON.stringify(postBody)
       });
       data = await res.json();
     }

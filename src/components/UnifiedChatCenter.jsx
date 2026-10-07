@@ -73,7 +73,9 @@ import {
   normalizeAttachment,
   sortLeadsByLatest,
   formatConversationTime,
-  getLeadTimestamp
+  getLeadTimestamp,
+  saveReplyQuoteCache,
+  getReplyQuoteCache
 } from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
@@ -749,9 +751,39 @@ export default function UnifiedChatCenter({
               status: (incoming.unreadCount && incoming.unreadCount > 0) ? 'ทักใหม่ (New)' : oldLead.status,
               customerPsid: incoming.customerPsid || oldLead.customerPsid,
               activePageToken: incoming.activePageToken || oldLead.activePageToken,
-              messages: (incoming.messages && incoming.messages.length > 0)
-                ? incoming.messages
-                : oldLead.messages
+              messages: (() => {
+                const oldMessages = oldLead.messages || [];
+                const incomingMessages = incoming.messages || [];
+                if (incomingMessages.length === 0) return oldMessages;
+
+                const merged = incomingMessages.map(incMsg => {
+                  const matchingOld = oldMessages.find(old =>
+                    old.id === incMsg.id ||
+                    (old.sender === incMsg.sender && old.text === incMsg.text && (old.time === incMsg.time || Math.abs((old.timestamp || 0) - (incMsg.timestamp || 0)) < 180000))
+                  );
+
+                  const cachedQuote = getReplyQuoteCache(incMsg.id) || getReplyQuoteCache(`${oldLead.id}_${incMsg.text}`);
+                  const preservedReplyTo = incMsg.replyTo || matchingOld?.replyTo || cachedQuote || null;
+
+                  if (preservedReplyTo && incMsg.id) {
+                    saveReplyQuoteCache(incMsg.id, preservedReplyTo);
+                  }
+
+                  return {
+                    ...incMsg,
+                    replyTo: preservedReplyTo,
+                    adminName: incMsg.adminName || matchingOld?.adminName
+                  };
+                });
+
+                // Keep recent optimistic messages not yet fetched by Graph API
+                const recentOptimistic = oldMessages.filter(old =>
+                  typeof old.id === 'string' && old.id.startsWith('msg-') &&
+                  !merged.some(m => m.text === old.text && m.sender === old.sender)
+                );
+
+                return [...merged, ...recentOptimistic];
+              })()
             };
           });
 
@@ -835,12 +867,27 @@ export default function UnifiedChatCenter({
             }
           }
 
+          // Extract reply_to from webhook event if customer quoted a message
+          const rawReplyTo = newRow.raw_event?.message?.reply_to || newRow.raw_event?.reply_to || newRow.reply_to;
+          let webhookReplyTo = null;
+          if (rawReplyTo) {
+            const targetMid = rawReplyTo.mid || rawReplyTo.id;
+            webhookReplyTo = {
+              id: targetMid,
+              mid: targetMid,
+              text: rawReplyTo.message || rawReplyTo.text || '',
+              sender: 'admin',
+              name: 'คุณ (แอดมิน)'
+            };
+          }
+
           const newIncomingMessage = {
             id: newRow.message_mid || `msg-${Date.now()}`,
             sender: 'lead',
             text: displayText,
             attachments: parsedAtts,
-            time: timeStr
+            time: timeStr,
+            replyTo: webhookReplyTo
           };
 
           const isCommentEvent = !!newRow.raw_event?.isComment;
@@ -862,6 +909,21 @@ export default function UnifiedChatCenter({
               if (isMatch) {
                 isFound = true;
                 const existingMsgs = lead.messages || [];
+
+                // Resolve quoted message details from conversation history
+                if (newIncomingMessage.replyTo) {
+                  const refMsg = existingMsgs.find(m => m.id === newIncomingMessage.replyTo.id || m.id === newIncomingMessage.replyTo.mid);
+                  if (refMsg) {
+                    newIncomingMessage.replyTo.text = refMsg.text || newIncomingMessage.replyTo.text;
+                    newIncomingMessage.replyTo.sender = refMsg.sender;
+                    newIncomingMessage.replyTo.name = refMsg.sender === 'admin' ? (refMsg.adminName || 'คุณ (แอดมิน)') : lead.name;
+                    newIncomingMessage.replyTo.attachments = refMsg.attachments;
+                  }
+                  if (newIncomingMessage.id) {
+                    saveReplyQuoteCache(newIncomingMessage.id, newIncomingMessage.replyTo);
+                  }
+                }
+
                 if (existingMsgs.some(m => m.id === newIncomingMessage.id || (m.text === newIncomingMessage.text && m.time === newIncomingMessage.time))) {
                   return lead;
                 }
@@ -1125,6 +1187,12 @@ export default function UnifiedChatCenter({
       replyTo: replyContext
     };
 
+    // Save reply quote to cache immediately
+    if (replyContext) {
+      saveReplyQuoteCache(newMessage.id, replyContext);
+      saveReplyQuoteCache(`${activeLead.id}_${newMessage.text}`, replyContext);
+    }
+
     const now = Date.now();
     const pad = (n) => String(n).padStart(2, '0');
     const d = new Date(now);
@@ -1197,14 +1265,20 @@ export default function UnifiedChatCenter({
             }
             // If admin also entered text, send text message as well
             if (messageTextToSend) {
-              await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
+              const sendRes = await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
+              if (sendRes?.message_id && replyContext) {
+                saveReplyQuoteCache(sendRes.message_id, replyContext);
+              }
             }
             const successLabel = isAllImages
               ? `รูปภาพ ${filesToSend.length} รูป`
               : `ไฟล์แนบ ${filesToSend.length} รายการ`;
             setToastNotification(`✅ ส่ง${successLabel}ตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
           } else {
-            await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
+            const sendRes = await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
+            if (sendRes?.message_id && replyContext) {
+              saveReplyQuoteCache(sendRes.message_id, replyContext);
+            }
             setToastNotification(`✅ ส่งข้อความตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จ!`);
           }
         }
