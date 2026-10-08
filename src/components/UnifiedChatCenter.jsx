@@ -312,6 +312,47 @@ export function getPageTheme(channelId) {
   };
 }
 
+// Helper to highlight searched query term in messages or snippets
+export function highlightSearchTerm(text, query, isAdmin = false) {
+  if (!query || !query.trim() || !text || typeof text !== 'string') return text;
+  const q = query.trim();
+  const lowerText = text.toLowerCase();
+  const lowerQ = q.toLowerCase();
+  if (!lowerText.includes(lowerQ)) return text;
+
+  const parts = [];
+  let lastIdx = 0;
+  let currIdx = lowerText.indexOf(lowerQ, lastIdx);
+
+  while (currIdx !== -1) {
+    if (currIdx > lastIdx) {
+      parts.push(text.slice(lastIdx, currIdx));
+    }
+    parts.push(
+      <mark
+        key={currIdx}
+        style={{
+          backgroundColor: '#fef08a',
+          color: '#854d0e',
+          padding: '1px 3px',
+          borderRadius: '3px',
+          fontWeight: '800'
+        }}
+      >
+        {text.slice(currIdx, currIdx + q.length)}
+      </mark>
+    );
+    lastIdx = currIdx + q.length;
+    currIdx = lowerText.indexOf(lowerQ, lastIdx);
+  }
+
+  if (lastIdx < text.length) {
+    parts.push(text.slice(lastIdx));
+  }
+
+  return parts;
+}
+
 export default function UnifiedChatCenter({
   leads,
   setLeads,
@@ -1061,10 +1102,33 @@ export default function UnifiedChatCenter({
   // Filter conversations and sort so the TRULY latest activity is on top across all pages
   const filteredConversations = sortLeadsByLatest(
     leads.filter(lead => {
-      const matchesSearch =
-        (lead.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (lead.inquiry || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (lead.sourceTitle && lead.sourceTitle.toLowerCase().includes(searchQuery.toLowerCase()));
+      const q = (searchQuery || '').trim().toLowerCase();
+
+      let matchesSearch = true;
+      if (q) {
+        const matchesName = (lead.name || '').toLowerCase().includes(q);
+        const matchesInquiry = (lead.inquiry || '').toLowerCase().includes(q);
+        const matchesSourceTitle = (lead.sourceTitle || '').toLowerCase().includes(q);
+        const matchesNotes = (lead.notes || '').toLowerCase().includes(q);
+        const matchesContact = (lead.contact || '').toLowerCase().includes(q) || (lead.phone || '').toLowerCase().includes(q);
+        const matchesStatus = (lead.status || '').toLowerCase().includes(q);
+        const matchesChannelName = (lead.channelName || '').toLowerCase().includes(q);
+
+        // Search through all messages in thread (customer + admin messages, reply quotes, file attachments)
+        const matchesMessages = Array.isArray(lead.messages) && lead.messages.some(m => {
+          if (!m) return false;
+          if (typeof m.text === 'string' && m.text.toLowerCase().includes(q)) return true;
+          if (typeof m.adminName === 'string' && m.adminName.toLowerCase().includes(q)) return true;
+          if (typeof m.replyTo?.text === 'string' && m.replyTo.text.toLowerCase().includes(q)) return true;
+          if (Array.isArray(m.attachments) && m.attachments.some(att =>
+            (typeof att?.name === 'string' && att.name.toLowerCase().includes(q)) ||
+            (typeof att?.type === 'string' && att.type.toLowerCase().includes(q))
+          )) return true;
+          return false;
+        });
+
+        matchesSearch = matchesName || matchesInquiry || matchesSourceTitle || matchesNotes || matchesContact || matchesStatus || matchesChannelName || matchesMessages;
+      }
 
       let matchesType = true;
       if (filterType === 'due_followup') {
@@ -1823,9 +1887,11 @@ export default function UnifiedChatCenter({
               backgroundColor: '#f1f5f9',
               borderRadius: '8px',
               padding: '6px 10px',
-              marginBottom: '8px'
+              marginBottom: '8px',
+              border: searchQuery ? '1px solid #93c5fd' : '1px solid transparent',
+              transition: 'all 0.15s ease'
             }}>
-              <Search size={14} color="#94a3b8" style={{ marginRight: '6px' }} />
+              <Search size={14} color={searchQuery ? '#2563eb' : '#94a3b8'} style={{ marginRight: '6px', flexShrink: 0 }} />
               <input
                 type="text"
                 placeholder="ค้นหาชื่อ, ข้อความ, คลิป..."
@@ -1836,9 +1902,29 @@ export default function UnifiedChatCenter({
                   backgroundColor: 'transparent',
                   fontSize: '0.8rem',
                   width: '100%',
-                  color: '#1e293b'
+                  color: '#1e293b',
+                  outline: 'none'
                 }}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    padding: '2px',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: '4px'
+                  }}
+                  title="ล้างคำค้นหา"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
             {/* Filter Pills */}
@@ -2015,6 +2101,10 @@ export default function UnifiedChatCenter({
                   lastMsg = '🖼️ [ส่งรูปภาพ / สติกเกอร์]';
                 }
                 const theme = getPageTheme(lead.channel);
+                const q = (searchQuery || '').trim().toLowerCase();
+                const matchedMsgObj = (q && Array.isArray(lead.messages))
+                  ? lead.messages.slice().reverse().find(m => m && typeof m.text === 'string' && m.text.toLowerCase().includes(q))
+                  : null;
 
                 return (
                   <div
@@ -2082,7 +2172,7 @@ export default function UnifiedChatCenter({
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap'
                         }}>
-                          {lead.name}
+                          {highlightSearchTerm(lead.name, searchQuery)}
                         </div>
                         <span style={{
                           fontSize: '0.70rem',
@@ -2203,30 +2293,50 @@ export default function UnifiedChatCenter({
                         )}
                       </div>
 
-                      <div style={{
-                        fontSize: '0.76rem',
-                        color: !isReplied ? '#0f172a' : '#64748b',
-                        fontWeight: !isReplied ? '700' : '400',
-                        lineHeight: '1.3',
-                        maxHeight: '32px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        wordBreak: 'break-word'
-                      }}>
-                        {isReplied ? (
-                          <span style={{ color: '#059669', fontWeight: '700', marginRight: '3px' }}>
-                            ↩️ ตอบแล้ว:
+                      {matchedMsgObj && q && !lead.name?.toLowerCase().includes(q) ? (
+                        <div style={{
+                          fontSize: '0.74rem',
+                          color: '#1e40af',
+                          backgroundColor: '#eff6ff',
+                          padding: '3px 7px',
+                          borderRadius: '6px',
+                          border: '1px solid #bfdbfe',
+                          lineHeight: '1.3',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          <span style={{ fontWeight: '800', marginRight: '4px', color: '#1d4ed8' }}>
+                            🔍 พบในแชท ({matchedMsgObj.sender === 'admin' ? 'แอดมิน' : 'ลูกค้า'}):
                           </span>
-                        ) : (
-                          <span style={{ color: '#dc2626', fontWeight: '800', marginRight: '3px' }}>
-                            💬 ลูกค้า:
-                          </span>
-                        )}
-                        {lastMsg}
-                      </div>
+                          {highlightSearchTerm(matchedMsgObj.text, searchQuery)}
+                        </div>
+                      ) : (
+                        <div style={{
+                          fontSize: '0.76rem',
+                          color: !isReplied ? '#0f172a' : '#64748b',
+                          fontWeight: !isReplied ? '700' : '400',
+                          lineHeight: '1.3',
+                          maxHeight: '32px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          wordBreak: 'break-word'
+                        }}>
+                          {isReplied ? (
+                            <span style={{ color: '#059669', fontWeight: '700', marginRight: '3px' }}>
+                              ↩️ ตอบแล้ว:
+                            </span>
+                          ) : (
+                            <span style={{ color: '#dc2626', fontWeight: '800', marginRight: '3px' }}>
+                              💬 ลูกค้า:
+                            </span>
+                          )}
+                          {highlightSearchTerm(lastMsg, searchQuery)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -2782,7 +2892,9 @@ export default function UnifiedChatCenter({
                             border: isAdmin ? 'none' : '1px solid #e2e8f0',
                             borderRadius: isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
                             padding: '11px 15px',
-                            boxShadow: 'var(--shadow-sm)',
+                            boxShadow: (searchQuery.trim() && typeof msg.text === 'string' && msg.text.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+                              ? '0 0 0 3px #facc15, 0 2px 8px rgba(250, 204, 21, 0.35)'
+                              : 'var(--shadow-sm)',
                             position: 'relative'
                           }}
                         >
@@ -3092,7 +3204,7 @@ export default function UnifiedChatCenter({
                           (!msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ')
                         ) && (
                             <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                              {msg.text}
+                              {highlightSearchTerm(msg.text, searchQuery, isAdmin)}
                             </div>
                           )}
 
