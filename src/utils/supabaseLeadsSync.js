@@ -37,7 +37,9 @@ export function mapDbToLead(row) {
     commentId: row.comment_id || row.commentId || null,
     postId: row.post_id || row.postId || null,
     isLiveFacebookLead: Boolean(row.is_live_facebook_lead ?? row.isLiveFacebookLead),
-    messages: Array.isArray(row.messages) ? row.messages : []
+    messages: Array.isArray(row.messages) ? row.messages : [],
+    customerRole: row.customer_role || row.customerRole || '',
+    phone: row.phone || ''
   };
 }
 
@@ -74,6 +76,8 @@ export function mapLeadToDb(lead) {
     post_id: lead.postId || null,
     is_live_facebook_lead: Boolean(lead.isLiveFacebookLead),
     messages: Array.isArray(lead.messages) ? lead.messages : [],
+    customer_role: lead.customerRole || '',
+    phone: lead.phone || '',
     updated_at: new Date().toISOString()
   };
 }

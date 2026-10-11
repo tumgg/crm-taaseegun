@@ -90,6 +90,14 @@ export const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80'
 ];
 
+export const CUSTOMER_ROLE_OPTIONS = [
+  { value: '', label: '-- ระบุประเภทลูกค้า --', badge: '', icon: '', color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' },
+  { value: 'ผู้รับเหมา', label: '🔨 ผู้รับเหมา', badge: 'ผู้รับเหมา', icon: '🔨', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+  { value: 'Turnkey', label: '🔑 Turnkey', badge: 'Turnkey', icon: '🔑', color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+  { value: 'ผู้ออกแบบ', label: '🎨 ผู้ออกแบบ', badge: 'ผู้ออกแบบ', icon: '🎨', color: '#7c3aed', bg: '#ede9fe', border: '#ddd6fe' },
+  { value: 'Owner', label: '👑 Owner (เจ้าของ)', badge: 'Owner', icon: '👑', color: '#047857', bg: '#d1fae5', border: '#a7f3d0' }
+];
+
 export function getLeadAvatarUrl(lead) {
   if (!lead) return null;
   // 1. Manually set or uploaded avatar
@@ -1201,6 +1209,7 @@ export default function UnifiedChatCenter({
         const matchesContact = (lead.contact || '').toLowerCase().includes(q) || (lead.phone || '').toLowerCase().includes(q);
         const matchesStatus = (lead.status || '').toLowerCase().includes(q);
         const matchesChannelName = (lead.channelName || '').toLowerCase().includes(q);
+        const matchesCustomerRole = (lead.customerRole || '').toLowerCase().includes(q);
 
         // Search through all messages in thread (customer + admin messages, reply quotes, file attachments)
         const matchesMessages = Array.isArray(lead.messages) && lead.messages.some(m => {
@@ -1215,7 +1224,7 @@ export default function UnifiedChatCenter({
           return false;
         });
 
-        matchesSearch = matchesName || matchesInquiry || matchesSourceTitle || matchesNotes || matchesContact || matchesStatus || matchesChannelName || matchesMessages;
+        matchesSearch = matchesName || matchesInquiry || matchesSourceTitle || matchesNotes || matchesContact || matchesStatus || matchesChannelName || matchesCustomerRole || matchesMessages;
       }
 
       let matchesType = true;
@@ -2285,6 +2294,29 @@ export default function UnifiedChatCenter({
                           {theme.icon} {theme.shortName}
                         </span>
 
+                        {/* Customer Role Badge (ผู้รับเหมา, Turnkey, ผู้ออกแบบ, Owner) */}
+                        {lead.customerRole && (
+                          <span style={{
+                            fontSize: '0.62rem',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            backgroundColor: lead.customerRole === 'ผู้รับเหมา' ? '#fef3c7' : (lead.customerRole === 'Turnkey' ? '#dbeafe' : (lead.customerRole === 'ผู้ออกแบบ' ? '#ede9fe' : '#d1fae5')),
+                            color: lead.customerRole === 'ผู้รับเหมา' ? '#b45309' : (lead.customerRole === 'Turnkey' ? '#1d4ed8' : (lead.customerRole === 'ผู้ออกแบบ' ? '#7c3aed' : '#047857')),
+                            fontWeight: '800',
+                            border: `1px solid ${lead.customerRole === 'ผู้รับเหมา' ? '#fde68a' : (lead.customerRole === 'Turnkey' ? '#bfdbfe' : (lead.customerRole === 'ผู้ออกแบบ' ? '#ddd6fe' : '#a7f3d0'))}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {lead.customerRole === 'ผู้รับเหมา' && '🔨'}
+                            {lead.customerRole === 'Turnkey' && '🔑'}
+                            {lead.customerRole === 'ผู้ออกแบบ' && '🎨'}
+                            {lead.customerRole === 'Owner' && '👑'}
+                            {lead.customerRole}
+                          </span>
+                        )}
+
                         {/* PROMINENT REPLY STATUS BADGE */}
                         {!isReplied ? (
                           <span style={{
@@ -2518,6 +2550,53 @@ export default function UnifiedChatCenter({
                       }}>
                         {activeTheme.icon} {activeTheme.shortName}
                       </span>
+
+                      {/* Customer Role Badge */}
+                      {activeLead.customerRole && (
+                        <span style={{
+                          fontSize: '0.68rem',
+                          padding: '2px 7px',
+                          borderRadius: '6px',
+                          backgroundColor: activeLead.customerRole === 'ผู้รับเหมา' ? '#fef3c7' : (activeLead.customerRole === 'Turnkey' ? '#dbeafe' : (activeLead.customerRole === 'ผู้ออกแบบ' ? '#ede9fe' : '#d1fae5')),
+                          color: activeLead.customerRole === 'ผู้รับเหมา' ? '#b45309' : (activeLead.customerRole === 'Turnkey' ? '#1d4ed8' : (activeLead.customerRole === 'ผู้ออกแบบ' ? '#7c3aed' : '#047857')),
+                          fontWeight: '800',
+                          border: `1px solid ${activeLead.customerRole === 'ผู้รับเหมา' ? '#fde68a' : (activeLead.customerRole === 'Turnkey' ? '#bfdbfe' : (activeLead.customerRole === 'ผู้ออกแบบ' ? '#ddd6fe' : '#a7f3d0'))}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {activeLead.customerRole === 'ผู้รับเหมา' && '🔨 '}
+                          {activeLead.customerRole === 'Turnkey' && '🔑 '}
+                          {activeLead.customerRole === 'ผู้ออกแบบ' && '🎨 '}
+                          {activeLead.customerRole === 'Owner' && '👑 '}
+                          {activeLead.customerRole}
+                        </span>
+                      )}
+
+                      {/* Phone Quick Call Link */}
+                      {activeLead.phone && (
+                        <a
+                          href={`tel:${activeLead.phone.replace(/[^0-9+]/g, '')}`}
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            backgroundColor: '#f0fdf4',
+                            color: '#166534',
+                            fontWeight: '800',
+                            border: '1px solid #bbf7d0',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            textDecoration: 'none',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="กดเพื่อโทรออก"
+                        >
+                          <Phone size={10} /> {activeLead.phone}
+                        </a>
+                      )}
 
                       {/* AI Intent Badge */}
                       {currentIntent && (
@@ -4322,116 +4401,253 @@ export default function UnifiedChatCenter({
                   </div>
                 </div>
 
-                {/* Customer Profile */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', margin: 0 }}>
-                      ข้อมูลลูกค้า
-                    </h4>
-                    <button
-                      onClick={() => setIsAvatarModalOpen(true)}
-                      style={{
+                {/* Customer Profile & Role / Phone Details */}
+                <div style={{
+                  padding: '12px',
+                  borderRadius: '12px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                }}>
+                  {/* Clean, Compact Header with Customer Avatar and Page */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    paddingBottom: '10px',
+                    borderBottom: '1px solid #f1f5f9',
+                    marginBottom: '10px'
+                  }}>
+                    <CustomerAvatar
+                      lead={activeLead}
+                      size={44}
+                      border="2px solid #ffffff"
+                      style={{ boxShadow: '0 2px 5px rgba(0,0,0,0.08)', flexShrink: 0 }}
+                    />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontWeight: '800',
+                        fontSize: '0.92rem',
+                        color: '#0f172a',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {activeLead.name}
+                      </div>
+                      <div style={{
+                        fontSize: '0.72rem',
+                        color: activeTheme.badgeText,
+                        backgroundColor: activeTheme.badgeBg,
+                        border: `1px solid ${activeTheme.badgeBorder}`,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '4px',
-                        padding: '3px 8px',
-                        backgroundColor: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        color: '#1d4ed8',
-                        fontSize: '0.72rem',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
-                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-                      title="เปลี่ยนหรืออัปโหลดรูปโปรไฟล์ลูกค้า"
-                    >
-                      <Camera size={12} /> เปลี่ยนรูปโปรไฟล์
-                    </button>
-                  </div>
-
-                  {/* Profile Card with Photo */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '10px',
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    marginBottom: '10px'
-                  }}>
-                    <div
-                      onClick={() => setIsAvatarModalOpen(true)}
-                      style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}
-                      title="คลิกเพื่อเปลี่ยนรูปโปรไฟล์"
-                    >
-                      <CustomerAvatar
-                        lead={activeLead}
-                        size={54}
-                        border="2px solid #ffffff"
-                        style={{ boxShadow: '0 2px 5px rgba(0,0,0,0.08)' }}
-                      />
-                      <span style={{
-                        position: 'absolute',
-                        bottom: '-2px',
-                        right: '-2px',
-                        backgroundColor: '#2563eb',
-                        color: '#ffffff',
-                        borderRadius: '50%',
-                        width: '18px',
-                        height: '18px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '2px solid #ffffff',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                        marginTop: '2px',
+                        fontWeight: '700'
                       }}>
-                        <Camera size={10} />
+                        {activeTheme.icon} {activeLead.channelName || activeTheme.name}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1. Dropdown: คนที่ทักแชทมาเป็นใคร (ผู้รับเหมา, Turnkey, ผู้ออกแบบ, Owner) */}
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.76rem',
+                      fontWeight: '800',
+                      color: '#334155',
+                      marginBottom: '5px'
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <User size={13} color="#2563eb" /> คนที่ทักแชทมาเป็นใคร
                       </span>
+                      {activeLead.customerRole && (
+                        <span style={{
+                          fontSize: '0.68rem',
+                          color: '#059669',
+                          backgroundColor: '#ecfdf5',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          fontWeight: '700'
+                        }}>
+                          ✓ บันทึกแล้ว
+                        </span>
+                      )}
                     </div>
-
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {activeLead.name}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                        {activeLead.avatar ? '🟢 รูปโปรไฟล์กำหนดเอง' : '🔵 รูปโปรไฟล์อัตโนมัติ'}
-                      </div>
+                    <div style={{ position: 'relative' }}>
+                      {(() => {
+                        const currentRoleConfig = CUSTOMER_ROLE_OPTIONS.find(o => o.value === activeLead.customerRole);
+                        return (
+                          <>
+                            <select
+                              value={activeLead.customerRole || ''}
+                              onChange={(e) => {
+                                const role = e.target.value;
+                                handleUpdateLeadField('customerRole', role);
+                                setToastNotification(`บันทึกประเภทผู้ติดต่อเป็น "${role || 'ไม่ระบุ'}" เรียบร้อยแล้ว`);
+                                setTimeout(() => setToastNotification(null), 2500);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px 28px 8px 10px',
+                                fontSize: '0.82rem',
+                                fontWeight: '700',
+                                color: currentRoleConfig?.color || '#334155',
+                                backgroundColor: currentRoleConfig?.bg || '#ffffff',
+                                border: `1.5px solid ${currentRoleConfig?.border || '#cbd5e1'}`,
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                outline: 'none',
+                                appearance: 'none',
+                                WebkitAppearance: 'none',
+                                transition: 'all 0.15s ease',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              {CUSTOMER_ROLE_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value} style={{ color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '600' }}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              size={14}
+                              style={{
+                                position: 'absolute',
+                                right: '10px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                pointerEvents: 'none',
+                                color: currentRoleConfig?.color || '#64748b'
+                              }}
+                            />
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                  <div style={{
-                    padding: '5px 8px',
-                    borderRadius: '6px',
-                    backgroundColor: activeTheme.badgeBg,
-                    border: `1px solid ${activeTheme.badgeBorder}`,
-                    color: activeTheme.badgeText,
-                    fontSize: '0.74rem',
-                    fontWeight: '800',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    marginBottom: '10px'
-                  }}>
-                    {activeTheme.icon} เพจ: {activeLead.channelName || activeTheme.name}
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                      <Phone size={14} color="#64748b" />
-                      <span>{activeLead.contact || 'Facebook Messenger'}</span>
+                  {/* 2. ช่องใส่เบอร์โทรศัพท์ */}
+                  <div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.76rem',
+                      fontWeight: '800',
+                      color: '#334155',
+                      marginBottom: '5px'
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Phone size={13} color="#2563eb" /> เบอร์โทรศัพท์ลูกค้า
+                      </span>
+                      {activeLead.phone && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(activeLead.phone);
+                              setToastNotification(`📋 คัดลอกเบอร์โทร "${activeLead.phone}" เรียบร้อยแล้ว`);
+                              setTimeout(() => setToastNotification(null), 2000);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              fontSize: '0.7rem',
+                              color: '#2563eb',
+                              cursor: 'pointer',
+                              fontWeight: '700',
+                              textDecoration: 'underline'
+                            }}
+                            title="คัดลอกเบอร์โทร"
+                          >
+                            คัดลอก
+                          </button>
+                          <a
+                            href={`tel:${activeLead.phone.replace(/[^0-9+]/g, '')}`}
+                            style={{
+                              fontSize: '0.68rem',
+                              color: '#059669',
+                              fontWeight: '800',
+                              textDecoration: 'none',
+                              backgroundColor: '#d1fae5',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}
+                            title="กดเพื่อโทรออก"
+                          >
+                            โทรออก
+                          </a>
+                        </div>
+                      )}
                     </div>
-
-                    {activeLead.tag && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                        <Tag size={14} color="#64748b" />
-                        <span>{activeLead.tag}</span>
-                      </div>
-                    )}
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="tel"
+                        placeholder="กรอกเบอร์โทร เช่น 081-234-5678"
+                        value={activeLead.phone || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          handleUpdateLeadField('phone', val);
+                          if (val && (!activeLead.contact || activeLead.contact.includes('@facebook.com'))) {
+                            handleUpdateLeadField('contact', val);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px 8px 30px',
+                          fontSize: '0.82rem',
+                          fontWeight: '600',
+                          color: '#0f172a',
+                          backgroundColor: '#ffffff',
+                          border: '1.5px solid #cbd5e1',
+                          borderRadius: '8px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.15s ease'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                        onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                      />
+                      <Phone
+                        size={13}
+                        color="#94a3b8"
+                        style={{
+                          position: 'absolute',
+                          left: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          pointerEvents: 'none'
+                        }}
+                      />
+                    </div>
                   </div>
+
+                  {activeLead.tag && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: '#64748b',
+                      fontSize: '0.72rem',
+                      marginTop: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #f1f5f9'
+                    }}>
+                      <Tag size={12} color="#94a3b8" />
+                      <span>แท็ก: {activeLead.tag}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* AI Sales Intelligence Card */}

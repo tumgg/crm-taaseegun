@@ -142,6 +142,8 @@ export default async function handler(req, res) {
           return {
             ...conv,
             lead_status: crmLead.status || conv.lead_status,
+            customer_role: crmLead.customer_role || null,
+            phone: crmLead.phone || null,
             tags: crmLead.tag ? [crmLead.tag] : (crmLead.tags || conv.tags),
             assigned_admin: crmLead.admin || conv.assigned_admin,
             deal_value: crmLead.deal_value || 0
@@ -222,6 +224,8 @@ export default async function handler(req, res) {
         page_id: c.page_id,
         page_name: c.page_name,
         customer_name: c.customer_name,
+        customer_role: c.customer_role || null,
+        phone: c.phone || null,
         last_message_preview: c.last_message_preview,
         last_message_at: c.last_message_at,
         answered: c.answered,
@@ -395,6 +399,8 @@ export default async function handler(req, res) {
         page_id: c.page_id,
         page_name: c.page_name,
         customer_name: c.customer_name,
+        customer_role: c.customer_role || null,
+        phone: c.phone || null,
         last_message_preview: c.last_message_preview,
         last_customer_message_at: c.last_customer_message_at,
         waiting_minutes: c.waiting_minutes,
@@ -441,6 +447,8 @@ export default async function handler(req, res) {
         results = dbLeads.map(l => ({
           lead_id: String(l.id),
           customer_name: l.name || 'ลูกค้า',
+          customer_role: l.customer_role || null,
+          phone: l.phone || null,
           page_name: l.channel_name || PAGE_CONFIGS[l.channel]?.name || 'เพจ Facebook',
           channel: l.channel || '',
           status: l.status || 'ทักใหม่ (New)',
@@ -456,6 +464,8 @@ export default async function handler(req, res) {
         results = convs.map(c => ({
           lead_id: `lead-${c.conversation_id}`,
           customer_name: c.customer_name,
+          customer_role: c.customer_role || null,
+          phone: c.phone || null,
           page_name: c.page_name,
           channel: c.page_id,
           status: c.lead_status,
