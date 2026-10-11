@@ -1,16 +1,12 @@
 // Data structures and mock data for OmniSocial Hub
 
 export const REAL_GOOD_VIBES_PAGE_ID = '113532784994486';
-export const REAL_GOOD_VIBES_TOKEN = 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXmFNrU2RIZASiV4YvZC1W3dmZAcfAxnZCC4ZA7ptk6r0WpKMBlnDRKBli8yzdZCLDBl77QQU58Wie0yZAYBNcWPNaLmZCl41bfe87zfeTj2qacppOOdnxyZAZAbpnpApaoBZCQtousIhkRpUuPGryfZAevGVXW6Ip2x0jijS4sKyb';
 
 export const REAL_TAASEEGUN_PAGE_ID = '110842514841725';
-export const REAL_TAASEEGUN_TOKEN = 'EAAZCpCdzNLVIBSq1P5PtexPOiXZAT7XQVZCuRqdSFWQZA8oLdDuT6SHStVgVUbTx7jljKvVLHnNDsDMw0817PC8ZC6ZCumGm2ZB4cRP0Jy7eNzs7cCfp6zIv30aSZBZA1tnZBPQ0F9w6711LJuiO35ZBWEJb05KkcbjZCTZCCEGUSjKDBpa3T5zwyxZBdr9Fq5NnMFl3kSXlGTj6p3';
 
 export const REAL_ROOMS_PAINTING_PAGE_ID = '100873871740668';
-export const REAL_ROOMS_PAINTING_TOKEN = 'EAAZCpCdzNLVIBSjdqZAM4wDDcc6vbF3CmsElAw4AVaGm18LlWZAD0nH2M8fyZC7fY6sFtBLGW7ALtRZAp46DZAJOXW7U7hz0xBkms7HSljk568IZBHVRGyPVpsKZBebpgZAsmOj7J7ljAzV2w3pUtq5tjcsZC8vO4m3urpE3dVZAHXmP7RTDccb5hWpqwj8A5mYalXxM3eg4YQI';
 
 export const REAL_TEXTURE_BEAR_PAGE_ID = '101038208390600';
-export const REAL_TEXTURE_BEAR_TOKEN = 'EAAZCpCdzNLVIBSog4QNw8GGM3TonPPEiH9icEwy55XZBQZAn3dIbbVFYFu9ZBPHHRQ08PhiRSNkzZB6QWfSF2ZCZBgaTYrhMculFPqC78NjdXiat4WPHmGPkECfyuEVXZCAZAEUvJeEDNTbIRZBhqSLD85qZAu3c1II7bCoK21PZCvuENYkViH1ZBvuWLZAZAc9nMc0TqNAJNdtddvx';
 
 export const initialFacebookPages = [
   {
@@ -23,7 +19,7 @@ export const initialFacebookPages = [
     reach: 98000,
     engagementRate: '5.8%',
     growthRate: '+18.4%',
-    activePageToken: REAL_GOOD_VIBES_TOKEN,
+    activePageToken: '',
     demographics: {
       gender: { women: 45, men: 52, other: 3 },
       ageRange: [
@@ -63,7 +59,7 @@ export const initialFacebookPages = [
     reach: 185000,
     engagementRate: '6.4%',
     growthRate: '+22.1%',
-    activePageToken: REAL_TAASEEGUN_TOKEN,
+    activePageToken: '',
     demographics: {
       gender: { women: 42, men: 55, other: 3 },
       ageRange: [
@@ -102,7 +98,7 @@ export const initialFacebookPages = [
     reach: 124000,
     engagementRate: '6.1%',
     growthRate: '+19.5%',
-    activePageToken: REAL_ROOMS_PAINTING_TOKEN,
+    activePageToken: '',
     demographics: {
       gender: { women: 54, men: 43, other: 3 },
       ageRange: [
@@ -141,7 +137,7 @@ export const initialFacebookPages = [
     reach: 89000,
     engagementRate: '6.7%',
     growthRate: '+16.2%',
-    activePageToken: REAL_TEXTURE_BEAR_TOKEN,
+    activePageToken: '',
     demographics: {
       gender: { women: 40, men: 57, other: 3 },
       ageRange: [

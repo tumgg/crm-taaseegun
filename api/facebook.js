@@ -1,13 +1,6 @@
 // Meta Facebook Graph API Serverless Proxy for Vercel
 // Securely proxies Facebook Graph API calls from backend without exposing Page Tokens to client browser
 
-const FALLBACK_TOKENS = {
-  '113532784994486': 'EAAZCpCdzNLVIBSqHMVvZCutYZAPmAZBpWItpfkNXmFNrU2RIZASiV4YvZC1W3dmZAcfAxnZCC4ZA7ptk6r0WpKMBlnDRKBli8yzdZCLDBl77QQU58Wie0yZAYBNcWPNaLmZCl41bfe87zfeTj2qacppOOdnxyZAZAbpnpApaoBZCQtousIhkRpUuPGryfZAevGVXW6Ip2x0jijS4sKyb',
-  '110842514841725': 'EAAZCpCdzNLVIBSq1P5PtexPOiXZAT7XQVZCuRqdSFWQZA8oLdDuT6SHStVgVUbTx7jljKvVLHnNDsDMw0817PC8ZC6ZCumGm2ZB4cRP0Jy7eNzs7cCfp6zIv30aSZBZA1tnZBPQ0F9w6711LJuiO35ZBWEJb05KkcbjZCTZCCEGUSjKDBpa3T5zwyxZBdr9Fq5NnMFl3kSXlGTj6p3',
-  '100873871740668': 'EAAZCpCdzNLVIBSjdqZAM4wDDcc6vbF3CmsElAw4AVaGm18LlWZAD0nH2M8fyZC7fY6sFtBLGW7ALtRZAp46DZAJOXW7U7hz0xBkms7HSljk568IZBHVRGyPVpsKZBebpgZAsmOj7J7ljAzV2w3pUtq5tjcsZC8vO4m3urpE3dVZAHXmP7RTDccb5hWpqwj8A5mYalXxM3eg4YQI',
-  '101038208390600': 'EAAZCpCdzNLVIBSog4QNw8GGM3TonPPEiH9icEwy55XZBQZAn3dIbbVFYFu9ZBPHHRQ08PhiRSNkzZB6QWfSF2ZCZBgaTYrhMculFPqC78NjdXiat4WPHmGPkECfyuEVXZCAZAEUvJeEDNTbIRZBhqSLD85qZAu3c1II7bCoK21PZCvuENYkViH1ZBvuWLZAZAc9nMc0TqNAJNdtddvx'
-};
-
 const PAGE_NAMES = {
   '113532784994486': 'รับพ่นสี Texture By Good Vibes',
   '110842514841725': 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี',
@@ -15,7 +8,7 @@ const PAGE_NAMES = {
   '101038208390600': 'รับทำสีเทกเจอร์ by ช่างหมี'
 };
 
-// Retrieve Page Token securely from environment variables (fallback during zero-downtime migration)
+// Retrieve Page Token securely from environment variables
 function getPageToken(pageId) {
   const envMap = {
     '113532784994486': process.env.FB_TOKEN_GOOD_VIBES || process.env.FB_TOKEN_113532784994486,
@@ -24,7 +17,7 @@ function getPageToken(pageId) {
     '101038208390600': process.env.FB_TOKEN_TEXTURE_BEAR || process.env.FB_TOKEN_101038208390600
   };
 
-  return envMap[pageId] || process.env[`FB_TOKEN_${pageId}`] || FALLBACK_TOKENS[pageId] || null;
+  return envMap[pageId] || process.env[`FB_TOKEN_${pageId}`] || null;
 }
 
 // Normalize attachments
@@ -161,7 +154,7 @@ export default async function handler(req, res) {
       }
 
       if (!convData.data || !Array.isArray(convData.data)) {
-        return res.status(200).json({ leads: [] });
+        return res.status(200).json({ success: true, leads: [] });
       }
 
       const leadsPromises = convData.data.slice(0, 15).map(async (conv) => {
@@ -362,6 +355,43 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------------------
+    // ACTION: send_attachment
+    // -------------------------------------------------------------
+    if (action === 'send_attachment') {
+      const { pageId, recipientPsid, fileBase64, fileName, fileType, mimeType } = req.body;
+      if (!pageId || !recipientPsid || !fileBase64) {
+        return res.status(400).json({ error: 'Missing pageId, recipientPsid, or fileBase64' });
+      }
+
+      const token = getPageToken(pageId);
+      if (!token) {
+        return res.status(400).json({ error: `No token found for pageId ${pageId}` });
+      }
+
+      const buffer = Buffer.from(fileBase64, 'base64');
+      const blob = new Blob([buffer], { type: mimeType || 'application/octet-stream' });
+      const formData = new FormData();
+      formData.append('recipient', JSON.stringify({ id: recipientPsid }));
+      formData.append('message', JSON.stringify({
+        attachment: {
+          type: fileType || 'file',
+          payload: { is_reusable: true }
+        }
+      }));
+      formData.append('filedata', blob, fileName || 'attachment');
+
+      const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(token)}`;
+      const fbRes = await fetch(url, { method: 'POST', body: formData });
+      const fbData = await fbRes.json();
+
+      if (fbData.error) {
+        return res.status(500).json({ error: fbData.error.message || 'Error sending attachment' });
+      }
+
+      return res.status(200).json({ success: true, result: fbData });
+    }
+
+    // -------------------------------------------------------------
     // ACTION: reply_comment
     // -------------------------------------------------------------
     if (action === 'reply_comment') {
@@ -385,6 +415,40 @@ export default async function handler(req, res) {
 
       if (fbData.error) {
         return res.status(500).json({ error: fbData.error.message || 'Error replying to comment' });
+      }
+
+      return res.status(200).json({ success: true, result: fbData });
+    }
+
+    // -------------------------------------------------------------
+    // ACTION: reply_comment_attachment
+    // -------------------------------------------------------------
+    if (action === 'reply_comment_attachment') {
+      const { pageId, commentId, messageText, fileBase64, fileName, mimeType } = req.body;
+      if (!pageId || !commentId) {
+        return res.status(400).json({ error: 'Missing pageId or commentId' });
+      }
+
+      const token = getPageToken(pageId);
+      if (!token) {
+        return res.status(400).json({ error: `No token found for pageId ${pageId}` });
+      }
+
+      const formData = new FormData();
+      if (messageText) formData.append('message', messageText);
+
+      if (fileBase64) {
+        const buffer = Buffer.from(fileBase64, 'base64');
+        const blob = new Blob([buffer], { type: mimeType || 'image/jpeg' });
+        formData.append('source', blob, fileName || 'photo.jpg');
+      }
+
+      const url = `https://graph.facebook.com/v19.0/${commentId}/comments?access_token=${encodeURIComponent(token)}`;
+      const fbRes = await fetch(url, { method: 'POST', body: formData });
+      const fbData = await fbRes.json();
+
+      if (fbData.error) {
+        return res.status(500).json({ error: fbData.error.message || 'Error replying to comment with attachment' });
       }
 
       return res.status(200).json({ success: true, result: fbData });

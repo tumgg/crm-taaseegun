@@ -48,13 +48,9 @@ import {
   quickReplyTemplates,
   interactionTypeOptions,
   REAL_GOOD_VIBES_PAGE_ID,
-  REAL_GOOD_VIBES_TOKEN,
   REAL_TAASEEGUN_PAGE_ID,
-  REAL_TAASEEGUN_TOKEN,
   REAL_ROOMS_PAINTING_PAGE_ID,
-  REAL_ROOMS_PAINTING_TOKEN,
-  REAL_TEXTURE_BEAR_PAGE_ID,
-  REAL_TEXTURE_BEAR_TOKEN
+  REAL_TEXTURE_BEAR_PAGE_ID
 } from '../data/mockData';
 import { playNotificationSound } from '../utils/sound';
 import {
@@ -687,48 +683,15 @@ export default function UnifiedChatCenter({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Sync real live conversations from Meta Graph API for all connected pages
+  // Sync real live conversations via secure serverless proxy for all connected pages
   const handleSyncRealFacebook = async (silent = false) => {
-    const isValidToken = (t) => typeof t === 'string' && t.startsWith('EAA') && !t.includes('...') && t.length > 50;
-
-    // Collect all pages with verified tokens
-    let pagesToSync = (facebookPages || []).filter(p => isValidToken(p.activePageToken));
-
-    // Ensure Good Vibes is included
-    if (!pagesToSync.some(p => p.id === REAL_GOOD_VIBES_PAGE_ID)) {
-      pagesToSync.push({
-        id: REAL_GOOD_VIBES_PAGE_ID,
-        name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes',
-        activePageToken: REAL_GOOD_VIBES_TOKEN
-      });
-    }
-
-    // Ensure Taaseegun is included
-    if (!pagesToSync.some(p => p.id === REAL_TAASEEGUN_PAGE_ID)) {
-      pagesToSync.push({
-        id: REAL_TAASEEGUN_PAGE_ID,
-        name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี',
-        activePageToken: REAL_TAASEEGUN_TOKEN
-      });
-    }
-
-    // Ensure RoomsPainting is included
-    if (!pagesToSync.some(p => p.id === REAL_ROOMS_PAINTING_PAGE_ID)) {
-      pagesToSync.push({
-        id: REAL_ROOMS_PAINTING_PAGE_ID,
-        name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting',
-        activePageToken: REAL_ROOMS_PAINTING_TOKEN
-      });
-    }
-
-    // Ensure Texture Bear (ช่างหมี) is included
-    if (!pagesToSync.some(p => p.id === REAL_TEXTURE_BEAR_PAGE_ID)) {
-      pagesToSync.push({
-        id: REAL_TEXTURE_BEAR_PAGE_ID,
-        name: 'รับทำสีเทกเจอร์ texture สีตกแต่งพิเศษ by ช่างหมี',
-        activePageToken: REAL_TEXTURE_BEAR_TOKEN
-      });
-    }
+    // 4 Real pages to sync securely via serverless proxy /api/facebook
+    const pagesToSync = [
+      { id: REAL_GOOD_VIBES_PAGE_ID, name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes' },
+      { id: REAL_TAASEEGUN_PAGE_ID, name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี' },
+      { id: REAL_ROOMS_PAINTING_PAGE_ID, name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting' },
+      { id: REAL_TEXTURE_BEAR_PAGE_ID, name: 'รับทำสีเทกเจอร์ texture สีตกแต่งพิเศษ by ช่างหมี' }
+    ];
 
     if (!silent) setIsSyncingFb(true);
     try {
@@ -1146,19 +1109,13 @@ export default function UnifiedChatCenter({
     const previousScrollTop = el ? el.scrollTop : 0;
 
     try {
-      const activeToken = activeLead.activePageToken || 
-        (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
-         activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
-         activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
-         activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
-
       const olderData = await fetchOlderConversationMessages(
         activeLead.olderMessagesUrl,
         activeLead.channel,
         activeLead.channelName,
         activeLead.name,
         activeLead.convId,
-        activeToken
+        activeLead.activePageToken || ''
       );
 
       if (olderData && olderData.messages && olderData.messages.length > 0) {
@@ -1419,29 +1376,26 @@ export default function UnifiedChatCenter({
     setReplyingToMessage(null);
     handleClearAllAttachments();
 
-    // If real live Facebook lead, deliver each attachment via Facebook Graph API
-    const pageToken = activeLead.activePageToken ||
-      (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
-        activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
-          activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
-            activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
+    // Deliver message via secure backend serverless proxy /api/facebook
+    const pageId = activeLead.channel;
+    const pageToken = activeLead.activePageToken || '';
 
-    if (pageToken) {
+    if (pageId || pageToken) {
       setIsSendingAttachment(true);
       try {
         if (activeLead.sourceType === 'post_comment' && activeLead.commentId) {
           if (attachmentsToSend.length > 0 && attachmentsToSend[0]?.file) {
             // Reply under comment with 1st photo
-            await replyToFacebookCommentWithAttachment(pageToken, activeLead.commentId, attachmentsToSend[0].file, messageTextToSend);
+            await replyToFacebookCommentWithAttachment(pageToken, activeLead.commentId, attachmentsToSend[0].file, messageTextToSend, pageId);
             setToastNotification(`✅ ตอบกลับพร้อมแนบรูปภาพใต้คอมเมนต์ของ "${activeLead.name}" สำเร็จ!`);
           } else {
             if (replyMode === 'comment') {
               // 1. Reply publicly under the Facebook Post Comment
-              await replyToFacebookComment(pageToken, activeLead.commentId, messageTextToSend);
+              await replyToFacebookComment(pageToken, activeLead.commentId, messageTextToSend, pageId);
               setToastNotification(`✅ ตอบกลับใต้คอมเมนต์ของ "${activeLead.name}" หน้าเพจสำเร็จแล้ว!`);
             } else {
               // 2. Reply privately into customer's Messenger Inbox from the comment
-              await sendFacebookPrivateReply(pageToken, activeLead.commentId, messageTextToSend);
+              await sendFacebookPrivateReply(pageToken, activeLead.commentId, messageTextToSend, pageId);
               setToastNotification(`✅ ส่งข้อความส่วนตัวเข้า Inbox ของ "${activeLead.name}" สำเร็จ!`);
             }
           }
@@ -1456,11 +1410,11 @@ export default function UnifiedChatCenter({
                 ? 'รูปภาพ'
                 : (filesToSend[i].file?.type === 'application/pdf' ? 'ไฟล์ PDF' : 'ไฟล์เอกสาร');
               setToastNotification(`🚀 กำลังส่ง${itemTypeLabel} (${i + 1}/${filesToSend.length}) เข้า Facebook Messenger...`);
-              await sendFacebookAttachment(pageToken, activeLead.customerPsid, filesToSend[i].file);
+              await sendFacebookAttachment(pageToken, activeLead.customerPsid, filesToSend[i].file, pageId);
             }
             // If admin also entered text, send text message as well
             if (messageTextToSend) {
-              const sendRes = await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
+              const sendRes = await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id, pageId);
               if (sendRes?.message_id && replyContext) {
                 saveReplyQuoteCache(sendRes.message_id, replyContext);
               }
@@ -1470,7 +1424,7 @@ export default function UnifiedChatCenter({
               : `ไฟล์แนบ ${filesToSend.length} รายการ`;
             setToastNotification(`✅ ส่ง${successLabel}ตรงเข้า Facebook Messenger ของ "${activeLead.name}" สำเร็จเรียบร้อย!`);
           } else {
-            const sendRes = await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id);
+            const sendRes = await sendFacebookMessengerReply(pageToken, activeLead.customerPsid, messageTextToSend, replyContext?.mid || replyContext?.id, pageId);
             if (sendRes?.message_id && replyContext) {
               saveReplyQuoteCache(sendRes.message_id, replyContext);
             }

@@ -1,12 +1,8 @@
 import { 
   REAL_GOOD_VIBES_PAGE_ID, 
-  REAL_GOOD_VIBES_TOKEN,
   REAL_TAASEEGUN_PAGE_ID,
-  REAL_TAASEEGUN_TOKEN,
   REAL_ROOMS_PAINTING_PAGE_ID,
-  REAL_ROOMS_PAINTING_TOKEN,
-  REAL_TEXTURE_BEAR_PAGE_ID,
-  REAL_TEXTURE_BEAR_TOKEN
+  REAL_TEXTURE_BEAR_PAGE_ID
 } from '../data/mockData';
 
 const LEADS_STORAGE_KEY = 'omnisocial_leads_v2';
@@ -60,40 +56,29 @@ export function loadStoredPages(fallbackPages) {
           (p.activePageToken && p.activePageToken.length > 50 && !p.activePageToken.includes('...'))
         );
 
-        // Ensure Good Vibes page is present with the verified real token
+        // Ensure all 4 real pages are present
         let goodVibes = activeOnly.find(p => p.id === REAL_GOOD_VIBES_PAGE_ID);
         if (!goodVibes) {
           goodVibes = fallbackPages.find(p => p.id === REAL_GOOD_VIBES_PAGE_ID) || fallbackPages[0];
           activeOnly.unshift(goodVibes);
-        } else {
-          goodVibes.activePageToken = REAL_GOOD_VIBES_TOKEN;
         }
 
-        // Ensure Taaseegun page is present with the verified real token
         let taaseegun = activeOnly.find(p => p.id === REAL_TAASEEGUN_PAGE_ID);
         if (!taaseegun) {
           taaseegun = fallbackPages.find(p => p.id === REAL_TAASEEGUN_PAGE_ID) || fallbackPages[1];
           if (taaseegun) activeOnly.push(taaseegun);
-        } else {
-          taaseegun.activePageToken = REAL_TAASEEGUN_TOKEN;
         }
 
-        // Ensure RoomsPainting page is present with the verified real token
         let roomsPainting = activeOnly.find(p => p.id === REAL_ROOMS_PAINTING_PAGE_ID);
         if (!roomsPainting) {
           roomsPainting = fallbackPages.find(p => p.id === REAL_ROOMS_PAINTING_PAGE_ID) || fallbackPages[2];
           if (roomsPainting) activeOnly.push(roomsPainting);
-        } else {
-          roomsPainting.activePageToken = REAL_ROOMS_PAINTING_TOKEN;
         }
 
-        // Ensure Texture Bear (ช่างหมี) page is present with the verified real token
         let textureBear = activeOnly.find(p => p.id === REAL_TEXTURE_BEAR_PAGE_ID);
         if (!textureBear) {
           textureBear = fallbackPages.find(p => p.id === REAL_TEXTURE_BEAR_PAGE_ID) || fallbackPages[3];
           if (textureBear) activeOnly.push(textureBear);
-        } else {
-          textureBear.activePageToken = REAL_TEXTURE_BEAR_TOKEN;
         }
 
         localStorage.setItem(PAGES_STORAGE_KEY, JSON.stringify(activeOnly));

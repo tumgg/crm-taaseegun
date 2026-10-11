@@ -12,13 +12,9 @@ import {
   initialFacebookPages, 
   initialLeads,
   REAL_GOOD_VIBES_PAGE_ID, 
-  REAL_GOOD_VIBES_TOKEN,
   REAL_TAASEEGUN_PAGE_ID, 
-  REAL_TAASEEGUN_TOKEN,
   REAL_ROOMS_PAINTING_PAGE_ID, 
-  REAL_ROOMS_PAINTING_TOKEN,
-  REAL_TEXTURE_BEAR_PAGE_ID, 
-  REAL_TEXTURE_BEAR_TOKEN
+  REAL_TEXTURE_BEAR_PAGE_ID
 } from './data/mockData';
 import { fetchLiveFacebookConversations, sortLeadsByLatest, getReplyQuoteCache, saveReplyQuoteCache } from './utils/facebookLiveSync';
 import { 
@@ -252,15 +248,15 @@ export default function App() {
     async function autoFetchOnMount() {
       try {
         const pagesToSync = [
-          { id: REAL_GOOD_VIBES_PAGE_ID, name: 'รับพ่นสี Texture By Good Vibes', activePageToken: REAL_GOOD_VIBES_TOKEN },
-          { id: REAL_TAASEEGUN_PAGE_ID, name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี', activePageToken: REAL_TAASEEGUN_TOKEN },
-          { id: REAL_ROOMS_PAINTING_PAGE_ID, name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting', activePageToken: REAL_ROOMS_PAINTING_TOKEN },
-          { id: REAL_TEXTURE_BEAR_PAGE_ID, name: 'รับทำสีเทกเจอร์ by ช่างหมี', activePageToken: REAL_TEXTURE_BEAR_TOKEN }
+          { id: REAL_GOOD_VIBES_PAGE_ID, name: 'รับพ่นสี Texture By Good Vibes' },
+          { id: REAL_TAASEEGUN_PAGE_ID, name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี' },
+          { id: REAL_ROOMS_PAINTING_PAGE_ID, name: 'ทาสีคอนโด ทาสีภายใน - RoomsPainting' },
+          { id: REAL_TEXTURE_BEAR_PAGE_ID, name: 'รับทำสีเทกเจอร์ by ช่างหมี' }
         ];
 
         const syncPromises = pagesToSync.map(async (page) => {
           try {
-            return await fetchLiveFacebookConversations(page.id, page.activePageToken, page.name);
+            return await fetchLiveFacebookConversations(page.id, '', page.name);
           } catch (err) {
             console.warn(`Sync error for ${page.name}:`, err);
             return [];

@@ -231,6 +231,35 @@ export function parseFacebookMessagesArray(dataArray, pageId, pageName, customer
 export async function fetchOlderConversationMessages(olderUrl, pageId, pageName, customerName, convId, pageToken) {
   if (!olderUrl) return { messages: [], nextOlderUrl: null, hasMore: false };
   try {
+    // 1. Try secure backend serverless proxy first
+    try {
+      const res = await fetch('/api/facebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'get_older_messages',
+          olderUrl,
+          pageId,
+          pageName,
+          customerName,
+          convId
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          return {
+            messages: data.messages || [],
+            nextOlderUrl: data.nextOlderUrl || null,
+            hasMore: !!data.hasMore
+          };
+        }
+      }
+    } catch (proxyErr) {
+      console.warn('Backend older messages proxy failed, falling back:', proxyErr);
+    }
+
+    // 2. Direct Graph API fallback if token present (local development)
     let targetUrl = olderUrl;
     if (pageToken && !targetUrl.includes('access_token=')) {
       targetUrl += (targetUrl.includes('?') ? '&' : '?') + `access_token=${encodeURIComponent(pageToken)}`;
@@ -254,6 +283,24 @@ export async function fetchOlderConversationMessages(olderUrl, pageId, pageName,
 
 export async function fetchLiveFacebookConversations(pageId, pageToken, pageName) {
   try {
+    // 1. Try secure backend serverless proxy first (/api/facebook)
+    try {
+      const proxyUrl = `/api/facebook?action=get_conversations&pageId=${encodeURIComponent(pageId)}&pageName=${encodeURIComponent(pageName || '')}`;
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.leads)) {
+          return sortLeadsByLatest(data.leads);
+        }
+      }
+    } catch (proxyErr) {
+      console.warn('Backend proxy fetch failed, falling back to direct Graph API if token available:', proxyErr);
+    }
+
+    if (!pageToken) {
+      return [];
+    }
+
     const url = `https://graph.facebook.com/v19.0/${pageId}/conversations?fields=id,snippet,updated_time,unread_count,senders{id,name,email,picture}&access_token=${encodeURIComponent(pageToken)}`;
     const res = await fetch(url);
     const data = await res.json();
@@ -451,47 +498,66 @@ export function normalizeAttachment(att) {
   };
 }
 
-export async function sendFacebookMessengerReply(pageToken, recipientPsid, messageText, replyToMid = null) {
+export async function sendFacebookMessengerReply(pageToken, recipientPsid, messageText, replyToMid = null, pageId = null) {
   try {
-    const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
-    const postBody = {
-      recipient: { id: recipientPsid },
-      message: { text: messageText },
-      messaging_type: 'RESPONSE'
-    };
-
-    // In Facebook Send API, reply_to must be at the root of the JSON payload
-    if (replyToMid && typeof replyToMid === 'string' && !replyToMid.startsWith('msg-') && !replyToMid.startsWith('att-')) {
-      postBody.reply_to = { mid: replyToMid };
+    // 1. Try secure backend proxy first if pageId provided
+    if (pageId) {
+      try {
+        const res = await fetch('/api/facebook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'send_message',
+            pageId,
+            recipientPsid,
+            messageText,
+            replyToMid
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) return data.result;
+        }
+      } catch (backendErr) {
+        console.warn('Backend send message proxy failed, falling back:', backendErr);
+      }
     }
 
-    let res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(postBody)
-    });
-    let data = await res.json();
+    // 2. Direct Graph API fallback if pageToken present (local dev)
+    if (pageToken) {
+      const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
+      const postBody = {
+        recipient: { id: recipientPsid },
+        message: { text: messageText },
+        messaging_type: 'RESPONSE'
+      };
 
-    // Fallback: If Facebook returns an error specifically because of reply_to, retry sending without reply_to
-    if (data.error && postBody.reply_to) {
-      console.warn('Facebook reply_to rejected, retrying without reply_to:', data.error);
-      delete postBody.reply_to;
-      res = await fetch(url, {
+      if (replyToMid && typeof replyToMid === 'string' && !replyToMid.startsWith('msg-') && !replyToMid.startsWith('att-')) {
+        postBody.reply_to = { mid: replyToMid };
+      }
+
+      let res = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(postBody)
       });
-      data = await res.json();
+      let data = await res.json();
+
+      if (data.error && postBody.reply_to) {
+        delete postBody.reply_to;
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(postBody)
+        });
+        data = await res.json();
+      }
+
+      if (data.error) throw new Error(data.error.message || 'ไม่สามารถส่งข้อความผ่าน Facebook API ได้');
+      return data;
     }
 
-    if (data.error) {
-      throw new Error(data.error.message || 'ไม่สามารถส่งข้อความผ่าน Facebook API ได้');
-    }
-    return data;
+    throw new Error('ไม่สามารถส่งข้อความได้: กรุณาตรวจสอบการตั้งค่าเพจหรือลองใหม่อีกครั้ง');
   } catch (err) {
     console.error('Error sending Facebook Messenger reply:', err);
     throw err;
@@ -499,39 +565,73 @@ export async function sendFacebookMessengerReply(pageToken, recipientPsid, messa
 }
 
 // Send File / Photo / Video / Document attachment directly to customer's Messenger inbox
-export async function sendFacebookAttachment(pageToken, recipientPsid, file) {
+export async function sendFacebookAttachment(pageToken, recipientPsid, file, pageId = null) {
   try {
     let fileType = 'file';
-    if (file.type.startsWith('image/')) {
-      fileType = 'image';
-    } else if (file.type.startsWith('video/')) {
-      fileType = 'video';
-    } else if (file.type.startsWith('audio/')) {
-      fileType = 'audio';
-    }
+    if (file.type?.startsWith('image/')) fileType = 'image';
+    else if (file.type?.startsWith('video/')) fileType = 'video';
+    else if (file.type?.startsWith('audio/')) fileType = 'audio';
 
-    const formData = new FormData();
-    formData.append('recipient', JSON.stringify({ id: recipientPsid }));
-    formData.append('message', JSON.stringify({
-      attachment: {
-        type: fileType,
-        payload: {
-          is_reusable: true
+    // 1. Try secure backend proxy first if pageId provided
+    if (pageId && file) {
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result;
+            resolve(typeof res === 'string' ? res.split(',')[1] : null);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        if (base64) {
+          const res = await fetch('/api/facebook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send_attachment',
+              pageId,
+              recipientPsid,
+              fileBase64: base64,
+              fileName: file.name,
+              fileType,
+              mimeType: file.type
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) return data.result;
+          }
         }
+      } catch (proxyErr) {
+        console.warn('Backend send attachment proxy failed, falling back:', proxyErr);
       }
-    }));
-    formData.append('filedata', file);
-
-    const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      body: formData
-    });
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(data.error.message || 'ไม่สามารถส่งไฟล์แนบผ่าน Facebook API ได้');
     }
-    return data;
+
+    // 2. Direct Graph API fallback if pageToken present
+    if (pageToken) {
+      const formData = new FormData();
+      formData.append('recipient', JSON.stringify({ id: recipientPsid }));
+      formData.append('message', JSON.stringify({
+        attachment: {
+          type: fileType,
+          payload: { is_reusable: true }
+        }
+      }));
+      formData.append('filedata', file);
+
+      const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || 'ไม่สามารถส่งไฟล์แนบผ่าน Facebook API ได้');
+      return data;
+    }
+
+    throw new Error('ไม่สามารถส่งไฟล์แนบได้');
   } catch (err) {
     console.error('Error sending Facebook attachment:', err);
     throw err;
@@ -539,23 +639,43 @@ export async function sendFacebookAttachment(pageToken, recipientPsid, file) {
 }
 
 // 1. Reply publicly under a post comment (text only)
-export async function replyToFacebookComment(pageToken, commentId, messageText) {
+export async function replyToFacebookComment(pageToken, commentId, messageText, pageId = null) {
   try {
-    const url = `https://graph.facebook.com/v19.0/${commentId}/comments?access_token=${encodeURIComponent(pageToken)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: messageText
-      })
-    });
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(data.error.message || 'ไม่สามารถตอบใต้คอมเมนต์ผ่าน Facebook API ได้');
+    // 1. Try secure backend proxy first if pageId provided
+    if (pageId) {
+      try {
+        const res = await fetch('/api/facebook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reply_comment',
+            pageId,
+            commentId,
+            messageText
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) return data.result;
+        }
+      } catch (proxyErr) {
+        console.warn('Backend reply comment proxy failed, falling back:', proxyErr);
+      }
     }
-    return data;
+
+    if (pageToken) {
+      const url = `https://graph.facebook.com/v19.0/${commentId}/comments?access_token=${encodeURIComponent(pageToken)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: messageText })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || 'ไม่สามารถตอบใต้คอมเมนต์ผ่าน Facebook API ได้');
+      return data;
+    }
+
+    throw new Error('ไม่สามารถตอบกลับคอมเมนต์ได้');
   } catch (err) {
     console.error('Error replying to Facebook comment:', err);
     throw err;
@@ -563,24 +683,58 @@ export async function replyToFacebookComment(pageToken, commentId, messageText) 
 }
 
 // Reply publicly under a post comment with an image attachment
-export async function replyToFacebookCommentWithAttachment(pageToken, commentId, file, messageText = '') {
+export async function replyToFacebookCommentWithAttachment(pageToken, commentId, file, messageText = '', pageId = null) {
   try {
-    const formData = new FormData();
-    if (messageText) {
-      formData.append('message', messageText);
-    }
-    formData.append('source', file);
+    // 1. Try secure backend proxy first if pageId provided
+    if (pageId && file) {
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result;
+            resolve(typeof res === 'string' ? res.split(',')[1] : null);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
-    const url = `https://graph.facebook.com/v19.0/${commentId}/comments?access_token=${encodeURIComponent(pageToken)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      body: formData
-    });
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(data.error.message || 'ไม่สามารถส่งรูปภาพตอบกลับคอมเมนต์ได้');
+        if (base64) {
+          const res = await fetch('/api/facebook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'reply_comment_attachment',
+              pageId,
+              commentId,
+              messageText,
+              fileBase64: base64,
+              fileName: file.name,
+              mimeType: file.type
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) return data.result;
+          }
+        }
+      } catch (proxyErr) {
+        console.warn('Backend reply comment with attachment proxy failed, falling back:', proxyErr);
+      }
     }
-    return data;
+
+    if (pageToken) {
+      const formData = new FormData();
+      if (messageText) formData.append('message', messageText);
+      formData.append('source', file);
+
+      const url = `https://graph.facebook.com/v19.0/${commentId}/comments?access_token=${encodeURIComponent(pageToken)}`;
+      const res = await fetch(url, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || 'ไม่สามารถส่งรูปภาพตอบกลับคอมเมนต์ได้');
+      return data;
+    }
+
+    throw new Error('ไม่สามารถตอบกลับคอมเมนต์พร้อมรูปภาพได้');
   } catch (err) {
     console.error('Error replying to Facebook comment with attachment:', err);
     throw err;
@@ -588,24 +742,46 @@ export async function replyToFacebookCommentWithAttachment(pageToken, commentId,
 }
 
 // 2. Reply privately into customer's Messenger Inbox from a post comment
-export async function sendFacebookPrivateReply(pageToken, commentId, messageText) {
+export async function sendFacebookPrivateReply(pageToken, commentId, messageText, pageId = null) {
   try {
-    const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        recipient: { comment_id: commentId },
-        message: { text: messageText }
-      })
-    });
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(data.error.message || 'ไม่สามารถส่งข้อความส่วนตัวเข้า Inbox จากคอมเมนต์ได้');
+    // 1. Try secure backend proxy first if pageId provided
+    if (pageId) {
+      try {
+        const res = await fetch('/api/facebook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'private_reply',
+            pageId,
+            commentId,
+            messageText
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) return data.result;
+        }
+      } catch (proxyErr) {
+        console.warn('Backend private reply proxy failed, falling back:', proxyErr);
+      }
     }
-    return data;
+
+    if (pageToken) {
+      const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: { comment_id: commentId },
+          message: { text: messageText }
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || 'ไม่สามารถส่งข้อความส่วนตัวเข้า Inbox จากคอมเมนต์ได้');
+      return data;
+    }
+
+    throw new Error('ไม่สามารถส่งข้อความส่วนตัวไปยังคอมเมนต์ได้');
   } catch (err) {
     console.error('Error sending private reply to comment:', err);
     throw err;
