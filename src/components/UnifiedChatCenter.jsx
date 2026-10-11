@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Send,
   Search,
@@ -40,7 +40,8 @@ import {
   Plus,
   Flame,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  History
 } from 'lucide-react';
 import {
   leadStatusOptions,
@@ -65,6 +66,7 @@ import {
 } from '../utils/aiAssistant';
 import {
   fetchLiveFacebookConversations,
+  fetchOlderConversationMessages,
   sendFacebookMessengerReply,
   sendFacebookAttachment,
   replyToFacebookComment,
@@ -817,14 +819,27 @@ export default function UnifiedChatCenter({
                   };
                 });
 
+                // Preserve earlier historical messages that were loaded into oldMessages but not in incoming
+                const incomingIds = new Set(merged.map(m => m.id));
+                const earliestMergedTimestamp = merged.length > 0 ? (merged[0].timestamp || 0) : Infinity;
+
+                const olderMessagesInState = oldMessages.filter(old =>
+                  !incomingIds.has(old.id) &&
+                  !merged.some(m => m.text === old.text && m.sender === old.sender && Math.abs((old.timestamp || 0) - (m.timestamp || 0)) < 180000) &&
+                  (old.timestamp || 0) <= earliestMergedTimestamp &&
+                  !(typeof old.id === 'string' && old.id.startsWith('msg-'))
+                );
+
                 // Keep recent optimistic messages not yet fetched by Graph API
                 const recentOptimistic = oldMessages.filter(old =>
                   typeof old.id === 'string' && old.id.startsWith('msg-') &&
                   !merged.some(m => m.text === old.text && m.sender === old.sender)
                 );
 
-                return [...merged, ...recentOptimistic];
-              })()
+                return [...olderMessagesInState, ...merged, ...recentOptimistic];
+              })(),
+              olderMessagesUrl: incoming.olderMessagesUrl !== undefined ? incoming.olderMessagesUrl : oldLead.olderMessagesUrl,
+              hasMoreOlderMessages: incoming.hasMoreOlderMessages !== undefined ? incoming.hasMoreOlderMessages : oldLead.hasMoreOlderMessages
             };
           });
 
@@ -1055,12 +1070,128 @@ export default function UnifiedChatCenter({
   const activeLead = leads.find(l => l.id === selectedLeadId) || leads[0];
   const activeTheme = getPageTheme(activeLead?.channel);
 
-  // Auto scroll to bottom of chat messages container ONLY (without scrolling the browser window)
-  useEffect(() => {
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const isNearBottomRef = useRef(true);
+  const prevLeadIdRef = useRef(activeLead?.id);
+  const prevMsgCountRef = useRef(activeLead?.messages?.length || 0);
+
+  // Track user scroll position in chat container
+  const handleChatScroll = useCallback(() => {
+    const el = chatMessagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const isNearBottom = distanceFromBottom < 100;
+    isNearBottomRef.current = isNearBottom;
+    setShowScrollBottomBtn(!isNearBottom);
+  }, []);
+
+  // Smooth scroll to bottom function for button or new sends
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
     if (chatMessagesContainerRef.current) {
-      chatMessagesContainerRef.current.scrollTop = chatMessagesContainerRef.current.scrollHeight;
+      chatMessagesContainerRef.current.scrollTo({
+        top: chatMessagesContainerRef.current.scrollHeight,
+        behavior: behavior
+      });
+      isNearBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+    }
+  }, []);
+
+  // Smart auto-scroll effect: does not interrupt reading when scrolled up 20-30 lines
+  useEffect(() => {
+    const el = chatMessagesContainerRef.current;
+    if (!el) return;
+
+    const leadChanged = activeLead?.id !== prevLeadIdRef.current;
+    const currentMsgCount = activeLead?.messages?.length || 0;
+    const prevMsgCount = prevMsgCountRef.current;
+    const hasNewMessages = currentMsgCount > prevMsgCount;
+
+    const latestMsg = activeLead?.messages?.[currentMsgCount - 1];
+    const justSentByAdmin = latestMsg?.sender === 'admin' && hasNewMessages;
+
+    if (leadChanged) {
+      // Switched lead -> always jump immediately to bottom
+      el.scrollTop = el.scrollHeight;
+      isNearBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+      prevLeadIdRef.current = activeLead?.id;
+      prevMsgCountRef.current = currentMsgCount;
+    } else if (justSentByAdmin) {
+      // Admin sent message -> scroll to bottom smoothly
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      isNearBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+      prevMsgCountRef.current = currentMsgCount;
+    } else if (hasNewMessages) {
+      // Incoming message from customer or sync
+      if (isNearBottomRef.current) {
+        // User was already at bottom, scroll down to show new message
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }
+      // If user was scrolled up reading earlier messages, DO NOT snap to bottom!
+      prevMsgCountRef.current = currentMsgCount;
+    } else {
+      prevMsgCountRef.current = currentMsgCount;
     }
   }, [activeLead?.messages, activeLead?.id]);
+
+  // Load older messages on demand
+  const handleLoadOlderMessages = async () => {
+    if (!activeLead?.olderMessagesUrl || isLoadingOlderMessages) return;
+    setIsLoadingOlderMessages(true);
+    const el = chatMessagesContainerRef.current;
+    const previousScrollHeight = el ? el.scrollHeight : 0;
+    const previousScrollTop = el ? el.scrollTop : 0;
+
+    try {
+      const activeToken = activeLead.activePageToken || 
+        (activeLead.channel === REAL_GOOD_VIBES_PAGE_ID ? REAL_GOOD_VIBES_TOKEN :
+         activeLead.channel === REAL_TAASEEGUN_PAGE_ID ? REAL_TAASEEGUN_TOKEN :
+         activeLead.channel === REAL_ROOMS_PAINTING_PAGE_ID ? REAL_ROOMS_PAINTING_TOKEN :
+         activeLead.channel === REAL_TEXTURE_BEAR_PAGE_ID ? REAL_TEXTURE_BEAR_TOKEN : null);
+
+      const olderData = await fetchOlderConversationMessages(
+        activeLead.olderMessagesUrl,
+        activeLead.channel,
+        activeLead.channelName,
+        activeLead.name,
+        activeLead.convId,
+        activeToken
+      );
+
+      if (olderData && olderData.messages && olderData.messages.length > 0) {
+        setLeads(prev => prev.map(l => {
+          if (l.id !== activeLead.id) return l;
+          const currentMsgs = l.messages || [];
+          const currentIds = new Set(currentMsgs.map(m => m.id));
+          const newOlder = olderData.messages.filter(m => !currentIds.has(m.id));
+          return {
+            ...l,
+            messages: [...newOlder, ...currentMsgs],
+            olderMessagesUrl: olderData.nextOlderUrl,
+            hasMoreOlderMessages: !!olderData.nextOlderUrl
+          };
+        }));
+
+        // Preserve scroll position so viewport doesn't jump
+        requestAnimationFrame(() => {
+          if (chatMessagesContainerRef.current) {
+            const newScrollHeight = chatMessagesContainerRef.current.scrollHeight;
+            chatMessagesContainerRef.current.scrollTop = (newScrollHeight - previousScrollHeight) + previousScrollTop;
+          }
+        });
+      } else {
+        // No more older messages
+        setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, olderMessagesUrl: null, hasMoreOlderMessages: false } : l));
+      }
+    } catch (err) {
+      console.warn('Failed to load older messages:', err);
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  };
 
   // Reset quoting/reply state when switching active conversations
   useEffect(() => {
@@ -2818,22 +2949,71 @@ export default function UnifiedChatCenter({
                 </div>
               )}
 
-              {/* Chat Messages Stream */}
-              <div
-                ref={chatMessagesContainerRef}
-                className="scrollable-pane"
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: 'auto',
-                  overscrollBehavior: 'contain',
-                  padding: '18px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                  backgroundColor: '#fafafa'
-                }}
-              >
+              {/* Chat Messages Stream Wrapper */}
+              <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <div
+                  ref={chatMessagesContainerRef}
+                  onScroll={handleChatScroll}
+                  className="scrollable-pane"
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    overscrollBehavior: 'contain',
+                    padding: '18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    backgroundColor: '#fafafa'
+                  }}
+                >
+                  {/* Load Older Messages Button (Top of Chat) */}
+                  {activeLead?.olderMessagesUrl && (
+                    <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 10px 0' }}>
+                      <button
+                        type="button"
+                        onClick={handleLoadOlderMessages}
+                        disabled={isLoadingOlderMessages}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '7px 16px',
+                          borderRadius: '20px',
+                          backgroundColor: '#ffffff',
+                          border: '1.5px solid #cbd5e1',
+                          color: '#334155',
+                          fontSize: '0.8rem',
+                          fontWeight: '700',
+                          cursor: isLoadingOlderMessages ? 'wait' : 'pointer',
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f8fafc';
+                          e.currentTarget.style.borderColor = activeTheme.primary;
+                          e.currentTarget.style.color = activeTheme.primary;
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = '#ffffff';
+                          e.currentTarget.style.borderColor = '#cbd5e1';
+                          e.currentTarget.style.color = '#334155';
+                        }}
+                      >
+                        {isLoadingOlderMessages ? (
+                          <>
+                            <RefreshCw size={13} className="animate-spin" />
+                            <span>กำลังดึงข้อความเก่า...</span>
+                          </>
+                        ) : (
+                          <>
+                            <History size={14} />
+                            <span>📜 โหลดประวัติแชทก่อนหน้านี้ (ดูข้อความเก่า)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 {(!activeLead.messages || activeLead.messages.length === 0) && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                     <div style={{
@@ -3266,6 +3446,46 @@ export default function UnifiedChatCenter({
                   </div>
                 );
               })}
+                </div>
+
+                {/* Floating Scroll to Bottom Button */}
+                {showScrollBottomBtn && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToBottom('smooth')}
+                    style={{
+                      position: 'absolute',
+                      bottom: '16px',
+                      right: '24px',
+                      zIndex: 20,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 16px',
+                      borderRadius: '999px',
+                      backgroundColor: '#1e293b',
+                      color: '#ffffff',
+                      border: '1.5px solid rgba(255,255,255,0.2)',
+                      boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
+                      cursor: 'pointer',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                      e.currentTarget.style.backgroundColor = activeTheme.primary;
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.0)';
+                      e.currentTarget.style.backgroundColor = '#1e293b';
+                    }}
+                    title="เลื่อนลงล่างสุด"
+                  >
+                    <ChevronDown size={16} />
+                    <span>เลื่อนลงล่างสุด</span>
+                  </button>
+                )}
               </div>
 
               {/* AI Suggestion Bar & Quick Reply Bar */}

@@ -69,6 +69,7 @@ const REPLY_QUOTES_KEY = 'omnisocial_reply_quotes_map_v1';
 
 export function saveReplyQuoteCache(key, replyToObj) {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
     if (!key || !replyToObj) return;
     const raw = localStorage.getItem(REPLY_QUOTES_KEY);
     const map = raw ? JSON.parse(raw) : {};
@@ -81,6 +82,7 @@ export function saveReplyQuoteCache(key, replyToObj) {
 
 export function getReplyQuoteCache(key) {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
     if (!key) return null;
     const raw = localStorage.getItem(REPLY_QUOTES_KEY);
     if (!raw) return null;
@@ -135,6 +137,121 @@ export function formatConversationTime(lead) {
   return `${msgDate.getDate()} ${thaiMonths[msgDate.getMonth()]} ${thaiShortYear}`;
 }
 
+// Parse and normalize Facebook Graph API messages array
+export function parseFacebookMessagesArray(dataArray, pageId, pageName, customerName, convId) {
+  if (!Array.isArray(dataArray) || dataArray.length === 0) return [];
+
+  // Sort ascending by created_time (oldest first, newest last)
+  const sorted = [...dataArray].sort((a, b) => {
+    const timeA = a.created_time ? new Date(a.created_time).getTime() : 0;
+    const timeB = b.created_time ? new Date(b.created_time).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  const parsed = sorted.map(m => {
+    const isFromPage = m.from?.id === pageId;
+    const msgDate = m.created_time ? new Date(m.created_time) : new Date();
+    const timeStr = `${String(msgDate.getHours()).padStart(2, '0')}:${String(msgDate.getMinutes()).padStart(2, '0')}`;
+
+    // Parse attachments (photos, videos, audio, documents, stickers)
+    const rawAtts = m.attachments?.data || [];
+    const parsedAttachments = rawAtts.map(att => normalizeAttachment(att)).filter(Boolean);
+
+    let text = typeof m.message === 'string' && m.message.trim() ? m.message.trim() : '';
+    if (!text && parsedAttachments.length > 0) {
+      if (parsedAttachments.some(a => a.isSticker)) {
+        text = '🏷️ สติกเกอร์';
+      } else if (parsedAttachments.some(a => a.type === 'image')) {
+        text = '🖼️ รูปภาพ';
+      } else if (parsedAttachments.some(a => a.type === 'video')) {
+        text = '🎥 วิดีโอ';
+      } else {
+        text = '📎 ไฟล์แนบ';
+      }
+    } else if (!text) {
+      text = '(ข้อความว่าง)';
+    }
+
+    // Extract reply_to info from Facebook Messenger payload if present
+    let parsedReplyTo = null;
+    if (m.reply_to) {
+      const targetMid = m.reply_to.mid || m.reply_to.id || (typeof m.reply_to === 'string' ? m.reply_to : null);
+      parsedReplyTo = {
+        id: targetMid,
+        mid: targetMid,
+        text: m.reply_to.message || m.reply_to.text || '',
+        sender: m.reply_to.from?.id === pageId ? 'admin' : 'lead',
+        name: m.reply_to.from?.id === pageId ? (pageName || 'คุณ (แอดมิน)') : customerName
+      };
+    }
+
+    // Check persistent reply quote cache if Facebook Graph API didn't return reply_to
+    if (!parsedReplyTo && m.id) {
+      parsedReplyTo = getReplyQuoteCache(m.id) || getReplyQuoteCache(`${convId}_${text}`) || null;
+    }
+    if (parsedReplyTo && m.id) {
+      saveReplyQuoteCache(m.id, parsedReplyTo);
+    }
+
+    return {
+      id: m.id || `msg-${Date.now()}-${Math.random()}`,
+      sender: isFromPage ? 'admin' : 'lead',
+      adminName: isFromPage ? (pageName || 'แอดมินเพจ') : undefined,
+      text: text,
+      attachments: parsedAttachments,
+      time: timeStr,
+      created_time: m.created_time,
+      timestamp: m.created_time ? new Date(m.created_time).getTime() : Date.now(),
+      replyTo: parsedReplyTo
+    };
+  });
+
+  // Post-process to resolve any replyTo against the messages in this thread
+  parsed.forEach(item => {
+    if (item.replyTo) {
+      const ref = parsed.find(target => target.id === item.replyTo.id || target.id === item.replyTo.mid);
+      if (ref) {
+        if (!item.replyTo.text || item.replyTo.text === '') {
+          item.replyTo.text = ref.text;
+        }
+        item.replyTo.sender = ref.sender;
+        item.replyTo.name = ref.sender === 'admin' ? (ref.adminName || 'คุณ (แอดมิน)') : customerName;
+        item.replyTo.attachments = ref.attachments;
+      }
+      if (item.id) {
+        saveReplyQuoteCache(item.id, item.replyTo);
+      }
+    }
+  });
+
+  return parsed;
+}
+
+// Fetch older conversation messages via pagination URL
+export async function fetchOlderConversationMessages(olderUrl, pageId, pageName, customerName, convId, pageToken) {
+  if (!olderUrl) return { messages: [], nextOlderUrl: null, hasMore: false };
+  try {
+    let targetUrl = olderUrl;
+    if (pageToken && !targetUrl.includes('access_token=')) {
+      targetUrl += (targetUrl.includes('?') ? '&' : '?') + `access_token=${encodeURIComponent(pageToken)}`;
+    }
+    const res = await fetch(targetUrl);
+    const data = await res.json();
+    if (data.data && Array.isArray(data.data)) {
+      const parsed = parseFacebookMessagesArray(data.data, pageId, pageName, customerName, convId);
+      return {
+        messages: parsed,
+        nextOlderUrl: data.paging?.next || null,
+        hasMore: !!data.paging?.next
+      };
+    }
+    return { messages: [], nextOlderUrl: null, hasMore: false };
+  } catch (err) {
+    console.error('Error fetching older conversation messages:', err);
+    return { messages: [], nextOlderUrl: null, hasMore: false };
+  }
+}
+
 export async function fetchLiveFacebookConversations(pageId, pageToken, pageName) {
   try {
     const url = `https://graph.facebook.com/v19.0/${pageId}/conversations?fields=id,snippet,updated_time,unread_count,senders{id,name,email,picture}&access_token=${encodeURIComponent(pageToken)}`;
@@ -160,99 +277,49 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
         const customerEmail = customerSender?.email || '';
         const customerAvatar = customerSender?.picture?.data?.url || null;
 
-        // Try fetching conversation messages with attachments and reply_to quotes
+        // Try fetching conversation messages with attachments and reply_to quotes (limit=100 for full chat history)
         let messageList = [];
+        let olderMessagesUrl = null;
         try {
           let msgData = null;
+          const fieldsWithReply = 'id,message,created_time,from,reply_to,attachments{id,mime_type,name,size,image_data,video_data,file_url}';
+          const fieldsFallback = 'id,message,created_time,from,attachments{id,mime_type,name,size,image_data,video_data,file_url}';
+
           try {
-            const msgRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=id,message,created_time,from,reply_to,attachments{id,mime_type,name,size,image_data,video_data,file_url}&access_token=${encodeURIComponent(pageToken)}`);
+            const msgRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=${fieldsWithReply}&limit=100&access_token=${encodeURIComponent(pageToken)}`);
             msgData = await msgRes.json();
           } catch (fetchErr) {
             console.warn('Initial fetch with reply_to failed, retrying without reply_to:', fetchErr);
           }
 
           if (!msgData || msgData.error) {
-            const fallbackRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=id,message,created_time,from,attachments{id,mime_type,name,size,image_data,video_data,file_url}&access_token=${encodeURIComponent(pageToken)}`);
+            const fallbackRes = await fetch(`https://graph.facebook.com/v19.0/${conv.id}/messages?fields=${fieldsFallback}&limit=100&access_token=${encodeURIComponent(pageToken)}`);
             msgData = await fallbackRes.json();
           }
 
           if (msgData.data && Array.isArray(msgData.data)) {
-            // Reverse so oldest is first
-            messageList = msgData.data.reverse().map(m => {
-              const isFromPage = m.from?.id === pageId;
-              const msgDate = m.created_time ? new Date(m.created_time) : new Date();
-              const timeStr = `${String(msgDate.getHours()).padStart(2, '0')}:${String(msgDate.getMinutes()).padStart(2, '0')}`;
+            let allRawMessages = [...msgData.data];
+            olderMessagesUrl = msgData.paging?.next || null;
 
-              // Parse attachments (photos, videos, audio, documents, stickers)
-              const rawAtts = m.attachments?.data || [];
-              const parsedAttachments = rawAtts.map(att => normalizeAttachment(att)).filter(Boolean);
-
-              let text = typeof m.message === 'string' && m.message.trim() ? m.message.trim() : '';
-              if (!text && parsedAttachments.length > 0) {
-                if (parsedAttachments.some(a => a.isSticker)) {
-                  text = '🏷️ สติกเกอร์';
-                } else if (parsedAttachments.some(a => a.type === 'image')) {
-                  text = '🖼️ รูปภาพ';
-                } else if (parsedAttachments.some(a => a.type === 'video')) {
-                  text = '🎥 วิดีโอ';
-                } else {
-                  text = '📎 ไฟล์แนบ';
+            // If 100 messages returned and there is a next page, auto-fetch 2nd batch (up to 200 messages)
+            if (allRawMessages.length >= 100 && olderMessagesUrl) {
+              try {
+                let p2Url = olderMessagesUrl;
+                if (!p2Url.includes('access_token=')) {
+                  p2Url += `&access_token=${encodeURIComponent(pageToken)}`;
                 }
-              } else if (!text) {
-                text = '(ข้อความว่าง)';
-              }
-
-              // Extract reply_to info from Facebook Messenger payload if present
-              let parsedReplyTo = null;
-              if (m.reply_to) {
-                const targetMid = m.reply_to.mid || m.reply_to.id || (typeof m.reply_to === 'string' ? m.reply_to : null);
-                parsedReplyTo = {
-                  id: targetMid,
-                  mid: targetMid,
-                  text: m.reply_to.message || m.reply_to.text || '',
-                  sender: m.reply_to.from?.id === pageId ? 'admin' : 'lead',
-                  name: m.reply_to.from?.id === pageId ? (pageName || 'คุณ (แอดมิน)') : customerName
-                };
-              }
-
-              // Check persistent reply quote cache if Facebook Graph API didn't return reply_to
-              if (!parsedReplyTo && m.id) {
-                parsedReplyTo = getReplyQuoteCache(m.id) || getReplyQuoteCache(`${conv.id}_${text}`) || null;
-              }
-              if (parsedReplyTo && m.id) {
-                saveReplyQuoteCache(m.id, parsedReplyTo);
-              }
-
-              return {
-                id: m.id || `msg-${Date.now()}-${Math.random()}`,
-                sender: isFromPage ? 'admin' : 'lead',
-                adminName: isFromPage ? (pageName || 'แอดมินเพจ') : undefined,
-                text: text,
-                attachments: parsedAttachments,
-                time: timeStr,
-                created_time: m.created_time,
-                timestamp: m.created_time ? new Date(m.created_time).getTime() : Date.now(),
-                replyTo: parsedReplyTo
-              };
-            });
-
-            // Post-process to resolve any replyTo against the messages in this thread
-            messageList.forEach(item => {
-              if (item.replyTo) {
-                const ref = messageList.find(target => target.id === item.replyTo.id || target.id === item.replyTo.mid);
-                if (ref) {
-                  if (!item.replyTo.text || item.replyTo.text === '') {
-                    item.replyTo.text = ref.text;
-                  }
-                  item.replyTo.sender = ref.sender;
-                  item.replyTo.name = ref.sender === 'admin' ? (ref.adminName || 'คุณ (แอดมิน)') : customerName;
-                  item.replyTo.attachments = ref.attachments;
+                const page2Res = await fetch(p2Url);
+                const page2Data = await page2Res.json();
+                if (page2Data.data && Array.isArray(page2Data.data)) {
+                  allRawMessages = [...allRawMessages, ...page2Data.data];
+                  olderMessagesUrl = page2Data.paging?.next || null;
                 }
-                if (item.id) {
-                  saveReplyQuoteCache(item.id, item.replyTo);
-                }
+              } catch (p2Err) {
+                console.warn('Auto-fetch 2nd batch of older messages failed:', p2Err);
               }
-            });
+            }
+
+            messageList = parseFacebookMessagesArray(allRawMessages, pageId, pageName, customerName, conv.id);
           }
         } catch (err) {
           console.warn('Could not fetch message details for conv', conv.id, err);
@@ -315,7 +382,9 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
           customerPsid: customerSender?.id || null,
           avatar: customerAvatar || null,
           activePageToken: pageToken,
-          messages: messageList
+          messages: messageList,
+          olderMessagesUrl: olderMessagesUrl || null,
+          hasMoreOlderMessages: !!olderMessagesUrl
         };
       } catch (convErr) {
         console.warn('Failed parsing conversation', conv.id, convErr);

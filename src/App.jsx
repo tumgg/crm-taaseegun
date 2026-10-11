@@ -308,13 +308,26 @@ export default function App() {
                     };
                   });
 
+                  // Preserve older historical messages previously loaded into oldMessages
+                  const incomingIds = new Set(merged.map(m => m.id));
+                  const earliestMergedTimestamp = merged.length > 0 ? (merged[0].timestamp || 0) : Infinity;
+
+                  const olderMessagesInState = oldMessages.filter(old =>
+                    !incomingIds.has(old.id) &&
+                    !merged.some(m => m.text === old.text && m.sender === old.sender && Math.abs((old.timestamp || 0) - (m.timestamp || 0)) < 180000) &&
+                    (old.timestamp || 0) <= earliestMergedTimestamp &&
+                    !(typeof old.id === 'string' && old.id.startsWith('msg-'))
+                  );
+
                   const recentOptimistic = oldMessages.filter(old =>
                     typeof old.id === 'string' && old.id.startsWith('msg-') &&
                     !merged.some(m => m.text === old.text && m.sender === old.sender)
                   );
 
-                  return [...merged, ...recentOptimistic];
+                  return [...olderMessagesInState, ...merged, ...recentOptimistic];
                 })(),
+                olderMessagesUrl: incoming.olderMessagesUrl !== undefined ? incoming.olderMessagesUrl : oldLead.olderMessagesUrl,
+                hasMoreOlderMessages: incoming.hasMoreOlderMessages !== undefined ? incoming.hasMoreOlderMessages : oldLead.hasMoreOlderMessages,
                 timestamp: incoming.timestamp || oldLead.timestamp || (incoming.updatedTime ? new Date(incoming.updatedTime).getTime() : Date.now()),
                 updatedTime: incoming.updatedTime || oldLead.updatedTime
               };
