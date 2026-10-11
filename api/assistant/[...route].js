@@ -65,9 +65,9 @@ export default async function handler(req, res) {
   // Normalize path segments whether called directly, via rewrite, or via query.route
   let pathSegments = [];
   if (Array.isArray(req.query.route)) {
-    pathSegments = req.query.route;
+    pathSegments = req.query.route.flatMap(s => typeof s === 'string' ? s.split('/') : s).filter(Boolean);
   } else if (typeof req.query.route === 'string') {
-    pathSegments = [req.query.route];
+    pathSegments = req.query.route.split('/').filter(Boolean);
   } else {
     // Parse from req.url
     const rawPath = req.url.split('?')[0];
