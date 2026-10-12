@@ -1244,6 +1244,16 @@ export default function UnifiedChatCenter({
     return false;
   };
 
+  // Helper: Only consider activity within the last 7 days (cut out old conversations from long ago)
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const isLeadWithinLast7Days = (lead) => {
+    if (!lead) return false;
+    const ts = getLeadTimestamp(lead);
+    if (!ts || isNaN(ts)) return false;
+    const diff = Date.now() - ts;
+    return diff >= -86400000 && diff <= SEVEN_DAYS_MS;
+  };
+
   // Filter conversations and sort so the TRULY latest activity is on top across all pages
   const filteredConversations = sortLeadsByLatest(
     leads.filter(lead => {
@@ -1278,11 +1288,11 @@ export default function UnifiedChatCenter({
 
       let matchesType = true;
       if (filterType === 'due_followup') {
-        matchesType = isFollowUpDue(lead.followUpDate) || detectFollowUpStatus(lead).needsFollowUp;
+        matchesType = isLeadWithinLast7Days(lead) && (isFollowUpDue(lead.followUpDate) || detectFollowUpStatus(lead).needsFollowUp);
       } else if (filterType === 'unreplied') {
-        matchesType = !isLeadReplied(lead);
+        matchesType = isLeadWithinLast7Days(lead) && !isLeadReplied(lead);
       } else if (filterType === 'replied') {
-        matchesType = isLeadReplied(lead);
+        matchesType = isLeadWithinLast7Days(lead) && isLeadReplied(lead);
       } else if (filterType !== 'all') {
         matchesType = lead.sourceType === filterType;
       }
@@ -1683,39 +1693,42 @@ export default function UnifiedChatCenter({
     );
   };
 
-  // Smart Follow-Up count (due date reached or customer silent > 18h)
+  // Smart Follow-Up count (due date reached or customer silent > 18h, within last 7 days)
   const dueFollowUpsCount = useMemo(() => {
     return leads.filter(l => {
       const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? l.platform === 'facebook' : l.channel === filterChannel);
-      return matchesChannel && (isFollowUpDue(l.followUpDate) || detectFollowUpStatus(l).needsFollowUp);
+      return matchesChannel && isLeadWithinLast7Days(l) && (isFollowUpDue(l.followUpDate) || detectFollowUpStatus(l).needsFollowUp);
     }).length;
   }, [leads, filterChannel]);
 
-  // Counts of unreplied vs replied conversations (respecting current channel filter)
+  // Counts of unreplied vs replied conversations within the last 7 days (excluding old inactive conversations)
   const unrepliedCount = useMemo(() => {
     return leads.filter(l => {
       const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? l.platform === 'facebook' : l.channel === filterChannel);
-      return matchesChannel && !isLeadReplied(l);
+      return matchesChannel && isLeadWithinLast7Days(l) && !isLeadReplied(l);
     }).length;
   }, [leads, filterChannel]);
 
   const repliedCount = useMemo(() => {
     return leads.filter(l => {
       const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? l.platform === 'facebook' : l.channel === filterChannel);
-      return matchesChannel && isLeadReplied(l);
+      return matchesChannel && isLeadWithinLast7Days(l) && isLeadReplied(l);
     }).length;
   }, [leads, filterChannel]);
 
-  // Counts of conversations per page (channel) for the logo buttons
+  // Counts of conversations per page (channel) for the logo buttons (7 days window for unreplied)
   const pageStats = useMemo(() => {
     const stats = {
-      all: { total: leads.length, unreplied: leads.filter(l => !isLeadReplied(l)).length }
+      all: {
+        total: leads.length,
+        unreplied: leads.filter(l => isLeadWithinLast7Days(l) && !isLeadReplied(l)).length
+      }
     };
     [REAL_GOOD_VIBES_PAGE_ID, REAL_TAASEEGUN_PAGE_ID, REAL_ROOMS_PAINTING_PAGE_ID, REAL_TEXTURE_BEAR_PAGE_ID].forEach(pid => {
       const pageLeads = leads.filter(l => l.channel === pid || l.page_id === pid);
       stats[pid] = {
         total: pageLeads.length,
-        unreplied: pageLeads.filter(l => !isLeadReplied(l)).length
+        unreplied: pageLeads.filter(l => isLeadWithinLast7Days(l) && !isLeadReplied(l)).length
       };
     });
     return stats;
@@ -2162,7 +2175,7 @@ export default function UnifiedChatCenter({
                   alignItems: 'center',
                   gap: '4px'
                 }}
-                title="กรองดูเฉพาะข้อความที่ยังไม่ได้ตอบลูกค้า"
+                title="กรองดูเฉพาะข้อความที่ยังไม่ได้ตอบลูกค้า (7 วันล่าสุด)"
               >
                 <span style={{
                   width: '6px',
@@ -2188,7 +2201,7 @@ export default function UnifiedChatCenter({
                   alignItems: 'center',
                   gap: '3px'
                 }}
-                title="กรองดูแชทที่ตอบกลับแล้ว"
+                title="กรองดูแชทที่ตอบกลับแล้ว (7 วันล่าสุด)"
               >
                 <Check size={11} strokeWidth={3} /> ตอบแล้ว ({repliedCount})
               </button>
@@ -2208,7 +2221,7 @@ export default function UnifiedChatCenter({
                   alignItems: 'center',
                   gap: '3px'
                 }}
-                title="กรองแชทที่ถึงเวลาต้องติดตาม หรือลูกค้าเงียบไปเกิน 18 ชม."
+                title="กรองแชทที่ถึงเวลาต้องติดตาม หรือลูกค้าเงียบไปเกิน 18 ชม. (7 วันล่าสุด)"
               >
                 ⏰ ต้องตาม ({dueFollowUpsCount})
               </button>
@@ -2284,10 +2297,12 @@ export default function UnifiedChatCenter({
               filteredConversations.map(lead => {
                 const isSelected = lead.id === activeLead?.id;
                 const isReplied = isLeadReplied(lead);
-                const hasDueFollowUp = isFollowUpDue(lead.followUpDate);
+                const isRecent = isLeadWithinLast7Days(lead);
+                const isUnrepliedAlert = !isReplied && isRecent;
+                const hasDueFollowUp = isRecent && isFollowUpDue(lead.followUpDate);
                 const closingInfo = analyzeClosingScore(lead);
                 const followUpInfo = detectFollowUpStatus(lead);
-                const isFollowUpNeeded = hasDueFollowUp || followUpInfo.needsFollowUp;
+                const isFollowUpNeeded = isRecent && (hasDueFollowUp || followUpInfo.needsFollowUp);
                 const lastMsgObj = lead.messages && lead.messages.length > 0
                   ? lead.messages[lead.messages.length - 1]
                   : null;
@@ -2319,21 +2334,21 @@ export default function UnifiedChatCenter({
                       margin: '4px 6px',
                       borderRadius: '12px',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? '#eff6ff' : (!isReplied ? '#ffffff' : '#fafafa'),
+                      backgroundColor: isSelected ? '#eff6ff' : (isUnrepliedAlert ? '#ffffff' : '#fafafa'),
                       borderLeft: isSelected
                         ? '4px solid #1877f2'
                         : (isFollowUpNeeded
                           ? '4px solid #ea580c'
-                          : (!isReplied
+                          : (isUnrepliedAlert
                             ? '4px solid #ef4444'
-                            : '4px solid #10b981'
+                            : (isReplied ? '4px solid #10b981' : '4px solid #cbd5e1')
                           )),
-                      borderTop: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
-                      borderRight: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
-                      borderBottom: !isReplied && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
+                      borderTop: isUnrepliedAlert && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
+                      borderRight: isUnrepliedAlert && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
+                      borderBottom: isUnrepliedAlert && !isSelected ? '1px solid #fee2e2' : '1px solid #f1f5f9',
                       boxShadow: isSelected
                         ? '0 2px 8px rgba(24, 119, 242, 0.15)'
-                        : (!isReplied
+                        : (isUnrepliedAlert
                           ? '0 2px 6px rgba(239, 68, 68, 0.06)'
                           : '0 1px 2px rgba(0,0,0,0.02)'),
                       display: 'flex',
@@ -2343,13 +2358,13 @@ export default function UnifiedChatCenter({
                     }}
                     onMouseOver={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = !isReplied ? '#fef2f2' : '#f1f5f9';
+                        e.currentTarget.style.backgroundColor = isUnrepliedAlert ? '#fef2f2' : '#f1f5f9';
                         e.currentTarget.style.transform = 'translateY(-1px)';
                       }
                     }}
                     onMouseOut={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = !isReplied ? '#ffffff' : '#fafafa';
+                        e.currentTarget.style.backgroundColor = isUnrepliedAlert ? '#ffffff' : '#fafafa';
                         e.currentTarget.style.transform = 'translateY(0)';
                       }
                     }}
@@ -2359,7 +2374,7 @@ export default function UnifiedChatCenter({
                       lead={lead}
                       size={40}
                       showStatusBadge={true}
-                      isReplied={isReplied}
+                      isReplied={isReplied || !isRecent}
                     />
 
                     {/* Card Content */}

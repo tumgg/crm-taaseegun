@@ -383,6 +383,8 @@ export default async function handler(req, res) {
         if (c.answered) return false;
         // Must exceed waiting_minutes
         if (c.waiting_minutes < minWaiting) return false;
+        // Exclude ancient conversations older than 7 days
+        if (c.waiting_minutes > 7 * 24 * 60) return false;
         // Date filter if provided
         if (date) {
           const convDateStr = getBangkokDateString(c.last_message_at);
