@@ -41,7 +41,8 @@ import {
   Flame,
   ChevronDown,
   ChevronUp,
-  History
+  History,
+  Layers
 } from 'lucide-react';
 import {
   leadStatusOptions,
@@ -250,6 +251,7 @@ export function getPageTheme(channelId) {
       name: 'บริษัท ทาสีกัน จำกัด',
       shortName: 'ทาสีกัน',
       icon: '🏠',
+      logo: '/images/page-logos/taaseegun.jpg',
       primary: '#d97706',
       darkText: '#92400e',
       bg: '#fffdf5',
@@ -268,6 +270,7 @@ export function getPageTheme(channelId) {
       name: 'RoomsPainting',
       shortName: 'RoomsPainting',
       icon: '🏢',
+      logo: '/images/page-logos/roomspainting.png',
       primary: '#7c3aed',
       darkText: '#5b21b6',
       bg: '#faf5ff',
@@ -286,6 +289,7 @@ export function getPageTheme(channelId) {
       name: 'ช่างหมี เทกเจอร์',
       shortName: 'ช่างหมี',
       icon: '🐻',
+      logo: '/images/page-logos/texturebear.png',
       primary: '#ea580c',
       darkText: '#9a3412',
       bg: '#fff8f3',
@@ -304,6 +308,7 @@ export function getPageTheme(channelId) {
     name: 'Good Vibes',
     shortName: 'Good Vibes',
     icon: '🎨',
+    logo: '/images/page-logos/goodvibes.jpg',
     primary: '#1d4ed8',
     darkText: '#1e40af',
     bg: '#f0f7ff',
@@ -317,6 +322,50 @@ export function getPageTheme(channelId) {
     badgeBorder: '#bfdbfe'
   };
 }
+
+export const PAGE_FILTER_TABS = [
+  {
+    id: 'all',
+    name: 'ทุกเพจ (ทุกแบรนด์)',
+    shortName: 'ทุกเพจ',
+    isAll: true,
+    color: '#0f172a',
+    accentBg: '#f1f5f9'
+  },
+  {
+    id: REAL_GOOD_VIBES_PAGE_ID,
+    name: 'รับพ่นสี Texture By Good Vibes',
+    shortName: 'Good Vibes',
+    logo: '/images/page-logos/goodvibes.jpg',
+    color: '#1877f2',
+    accentBg: '#dbeafe'
+  },
+  {
+    id: REAL_TAASEEGUN_PAGE_ID,
+    name: 'บริษัท ทาสีกัน จำกัด - ช่างเสือ ทาสี',
+    shortName: 'ทาสีกัน',
+    logo: '/images/page-logos/taaseegun.jpg',
+    color: '#d97706',
+    accentBg: '#fef3c7'
+  },
+  {
+    id: REAL_ROOMS_PAINTING_PAGE_ID,
+    name: 'ทาสีคอนโด RoomsPainting',
+    shortName: 'Rooms',
+    fullName: 'RoomsPainting',
+    logo: '/images/page-logos/roomspainting.png',
+    color: '#7c3aed',
+    accentBg: '#ede9fe'
+  },
+  {
+    id: REAL_TEXTURE_BEAR_PAGE_ID,
+    name: 'รับทำสีเทกเจอร์ by ช่างหมี',
+    shortName: 'ช่างหมี',
+    logo: '/images/page-logos/texturebear.png',
+    color: '#ea580c',
+    accentBg: '#ffedd5'
+  }
+];
 
 // Helper to highlight searched query term in messages or snippets
 export function highlightSearchTerm(text, query, isAdmin = false) {
@@ -1657,6 +1706,21 @@ export default function UnifiedChatCenter({
     }).length;
   }, [leads, filterChannel]);
 
+  // Counts of conversations per page (channel) for the logo buttons
+  const pageStats = useMemo(() => {
+    const stats = {
+      all: { total: leads.length, unreplied: leads.filter(l => !isLeadReplied(l)).length }
+    };
+    [REAL_GOOD_VIBES_PAGE_ID, REAL_TAASEEGUN_PAGE_ID, REAL_ROOMS_PAINTING_PAGE_ID, REAL_TEXTURE_BEAR_PAGE_ID].forEach(pid => {
+      const pageLeads = leads.filter(l => l.channel === pid || l.page_id === pid);
+      stats[pid] = {
+        total: pageLeads.length,
+        unreplied: pageLeads.filter(l => !isLeadReplied(l)).length
+      };
+    });
+    return stats;
+  }, [leads]);
+
   return (
     <div className="animate-fade-in chat-center-root" style={{ position: 'relative' }}>
       {/* Toast Notification Alert */}
@@ -1882,96 +1946,139 @@ export default function UnifiedChatCenter({
               </span>
             </div>
 
-            {/* Page Filter Tabs (5 buttons with clean wrap) */}
+            {/* Page Filter Tabs with Real Official Facebook Page Logos */}
             <div style={{
-              display: 'flex',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, 1fr)',
               gap: '4px',
-              marginBottom: '8px',
-              overflowX: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              scrollbarWidth: 'none',
-              paddingBottom: '2px',
-              flexShrink: 0
+              marginBottom: '10px',
+              padding: '6px 4px',
+              backgroundColor: '#f8fafc',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0'
             }}>
-              <button
-                onClick={() => setFilterChannel('all')}
-                style={{
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: filterChannel === 'all' ? '700' : '500',
-                  backgroundColor: filterChannel === 'all' ? '#0f172a' : '#f1f5f9',
-                  color: filterChannel === 'all' ? '#ffffff' : '#64748b',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                ทุกเพจ
-              </button>
-              <button
-                onClick={() => setFilterChannel(REAL_GOOD_VIBES_PAGE_ID)}
-                style={{
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '700' : '500',
-                  backgroundColor: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '#1877f2' : '#f1f5f9',
-                  color: filterChannel === REAL_GOOD_VIBES_PAGE_ID ? '#ffffff' : '#64748b',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-                title="Good Vibes Texture"
-              >
-                🎨 Good Vibes
-              </button>
-              <button
-                onClick={() => setFilterChannel(REAL_TAASEEGUN_PAGE_ID)}
-                style={{
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '700' : '500',
-                  backgroundColor: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '#d97706' : '#f1f5f9',
-                  color: filterChannel === REAL_TAASEEGUN_PAGE_ID ? '#ffffff' : '#64748b',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-                title="บริษัท ทาสีกัน จำกัด"
-              >
-                🏠 ทาสีกัน
-              </button>
-              <button
-                onClick={() => setFilterChannel(REAL_ROOMS_PAINTING_PAGE_ID)}
-                style={{
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '700' : '500',
-                  backgroundColor: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '#7c3aed' : '#f1f5f9',
-                  color: filterChannel === REAL_ROOMS_PAINTING_PAGE_ID ? '#ffffff' : '#64748b',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-                title="ทาสีคอนโด RoomsPainting"
-              >
-                🏢 RoomsPainting
-              </button>
-              <button
-                onClick={() => setFilterChannel(REAL_TEXTURE_BEAR_PAGE_ID)}
-                style={{
-                  padding: '4px 6px',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: filterChannel === REAL_TEXTURE_BEAR_PAGE_ID ? '700' : '500',
-                  backgroundColor: filterChannel === REAL_TEXTURE_BEAR_PAGE_ID ? '#ea580c' : '#f1f5f9',
-                  color: filterChannel === REAL_TEXTURE_BEAR_PAGE_ID ? '#ffffff' : '#64748b',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-                title="รับทำสีเทกเจอร์ by ช่างหมี"
-              >
-                🐻 ช่างหมี
-              </button>
+              {PAGE_FILTER_TABS.map(tab => {
+                const isSelected = filterChannel === tab.id;
+                const stats = pageStats[tab.id] || { total: 0, unreplied: 0 };
+                const unreplied = stats.unreplied;
+
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setFilterChannel(tab.id)}
+                    title={`${tab.name} (${stats.total} รายการ${unreplied > 0 ? `, รอตอบ ${unreplied}` : ''})`}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      padding: '5px 2px',
+                      background: isSelected ? '#ffffff' : 'transparent',
+                      border: isSelected ? `1.5px solid ${tab.color}` : '1.5px solid transparent',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                      transition: 'all 0.15s ease',
+                      position: 'relative',
+                      minWidth: 0
+                    }}
+                    onMouseOver={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = '#f1f5f9';
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    {/* Logo Avatar or All-Pages Icon */}
+                    <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0 }}>
+                      {tab.isAll ? (
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: isSelected ? '#0f172a' : '#cbd5e1',
+                          color: isSelected ? '#ffffff' : '#475569',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: isSelected ? '0 1px 3px rgba(0,0,0,0.2)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}>
+                          <Layers size={16} />
+                        </div>
+                      ) : (
+                        <img
+                          src={tab.logo}
+                          alt={tab.shortName}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: isSelected ? `2px solid ${tab.color}` : '1px solid #cbd5e1',
+                            boxShadow: isSelected ? `0 0 0 2px ${tab.accentBg}` : 'none',
+                            filter: isSelected ? 'none' : 'grayscale(12%)',
+                            transition: 'all 0.15s ease',
+                            backgroundColor: '#ffffff',
+                            display: 'block'
+                          }}
+                          onError={(e) => {
+                            if (!e.target.src.includes('graph.facebook.com')) {
+                              e.target.src = `https://graph.facebook.com/${tab.id}/picture?type=normal`;
+                            }
+                          }}
+                        />
+                      )}
+
+                      {/* Unreplied Notification Badge */}
+                      {unreplied > 0 && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '-3px',
+                          right: '-4px',
+                          backgroundColor: '#ef4444',
+                          color: '#ffffff',
+                          fontSize: '0.58rem',
+                          fontWeight: '800',
+                          minWidth: '14px',
+                          height: '14px',
+                          borderRadius: '999px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 2px',
+                          border: '1.5px solid #ffffff',
+                          boxShadow: '0 1px 3px rgba(239, 68, 68, 0.4)'
+                        }}>
+                          {unreplied > 99 ? '99+' : unreplied}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Short Text Label */}
+                    <span style={{
+                      fontSize: '0.64rem',
+                      fontWeight: isSelected ? '800' : '600',
+                      color: isSelected ? tab.color : '#64748b',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '100%',
+                      textAlign: 'center',
+                      lineHeight: '1.1'
+                    }}>
+                      {tab.shortName}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Search Input */}
@@ -2291,7 +2398,14 @@ export default function UnifiedChatCenter({
                           alignItems: 'center',
                           gap: '3px'
                         }}>
-                          {theme.icon} {theme.shortName}
+                          {theme.logo ? (
+                            <img
+                              src={theme.logo}
+                              alt=""
+                              style={{ width: '13px', height: '13px', borderRadius: '50%', objectFit: 'cover' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                          ) : theme.icon} {theme.shortName}
                         </span>
 
                         {/* Customer Role Badge (ผู้รับเหมา, Turnkey, ผู้ออกแบบ, Owner) */}
@@ -2548,7 +2662,14 @@ export default function UnifiedChatCenter({
                         gap: '3px',
                         whiteSpace: 'nowrap'
                       }}>
-                        {activeTheme.icon} {activeTheme.shortName}
+                        {activeTheme.logo ? (
+                          <img
+                            src={activeTheme.logo}
+                            alt=""
+                            style={{ width: '14px', height: '14px', borderRadius: '50%', objectFit: 'cover' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : activeTheme.icon} {activeTheme.shortName}
                       </span>
 
                       {/* Customer Role Badge */}
@@ -4448,7 +4569,14 @@ export default function UnifiedChatCenter({
                         marginTop: '2px',
                         fontWeight: '700'
                       }}>
-                        {activeTheme.icon} {activeLead.channelName || activeTheme.name}
+                        {activeTheme.logo ? (
+                          <img
+                            src={activeTheme.logo}
+                            alt=""
+                            style={{ width: '14px', height: '14px', borderRadius: '50%', objectFit: 'cover' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : activeTheme.icon} {activeLead.channelName || activeTheme.name}
                       </div>
                     </div>
                   </div>
