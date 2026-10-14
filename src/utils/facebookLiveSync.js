@@ -537,12 +537,12 @@ export async function sendFacebookMessengerReply(pageToken, recipientPsid, messa
             replyToMid
           })
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) return data.result;
-        }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) return data.result;
+        if (data.error) throw new Error(data.error);
       } catch (backendErr) {
-        console.warn('Backend send message proxy failed, falling back:', backendErr);
+        console.warn('Backend send message proxy failed:', backendErr);
+        if (backendErr.message && !backendErr.message.includes('fetch')) throw backendErr;
       }
     }
 
@@ -677,12 +677,12 @@ export async function replyToFacebookComment(pageToken, commentId, messageText, 
             messageText
           })
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) return data.result;
-        }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) return data.result;
+        if (data.error) throw new Error(data.error);
       } catch (proxyErr) {
-        console.warn('Backend reply comment proxy failed, falling back:', proxyErr);
+        console.warn('Backend reply comment proxy failed:', proxyErr);
+        if (proxyErr.message && !proxyErr.message.includes('fetch')) throw proxyErr;
       }
     }
 
@@ -780,12 +780,12 @@ export async function sendFacebookPrivateReply(pageToken, commentId, messageText
             messageText
           })
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) return data.result;
-        }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) return data.result;
+        if (data.error) throw new Error(data.error);
       } catch (proxyErr) {
-        console.warn('Backend private reply proxy failed, falling back:', proxyErr);
+        console.warn('Backend private reply proxy failed:', proxyErr);
+        if (proxyErr.message && !proxyErr.message.includes('fetch')) throw proxyErr;
       }
     }
 

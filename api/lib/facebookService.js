@@ -303,6 +303,43 @@ export async function sendFacebookReply(pageId, recipientPsid, messageText, repl
     data = await res.json();
   }
 
+  // Automatic retry with HUMAN_AGENT message tag if outside 24-hour window
+  if (data.error && (data.error.code === 10 || data.error.error_subcode === 2018278 || String(data.error.message || '').includes('window') || String(data.error.message || '').includes('24'))) {
+    const humanAgentBody = {
+      recipient: { id: recipientPsid },
+      message: { text: messageText },
+      messaging_type: 'MESSAGE_TAG',
+      tag: 'HUMAN_AGENT'
+    };
+    const tagRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(humanAgentBody)
+    });
+    const tagData = await tagRes.json();
+    if (!tagData.error) {
+      return tagData;
+    }
+    // Fallback tag if HUMAN_AGENT is not provisioned on page
+    if (tagData.error && tagData.error.code === 10) {
+      const fallbackTagBody = {
+        recipient: { id: recipientPsid },
+        message: { text: messageText },
+        messaging_type: 'MESSAGE_TAG',
+        tag: 'ACCOUNT_UPDATE'
+      };
+      const fbRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackTagBody)
+      });
+      const fbData = await fbRes.json();
+      if (!fbData.error) {
+        return fbData;
+      }
+    }
+  }
+
   if (data.error) throw new Error(data.error.message || 'Error sending Facebook reply');
   return data;
 }
@@ -328,7 +365,25 @@ export async function sendFacebookAttachment(pageId, recipientPsid, fileBase64, 
 
   const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(token)}`;
   const res = await fetch(url, { method: 'POST', body: formData });
-  const data = await res.json();
+  let data = await res.json();
+
+  // Retry with HUMAN_AGENT tag if outside 24-hour window
+  if (data.error && (data.error.code === 10 || data.error.error_subcode === 2018278 || String(data.error.message || '').includes('window') || String(data.error.message || '').includes('24'))) {
+    const tagFormData = new FormData();
+    tagFormData.append('recipient', JSON.stringify({ id: recipientPsid }));
+    tagFormData.append('messaging_type', 'MESSAGE_TAG');
+    tagFormData.append('tag', 'HUMAN_AGENT');
+    tagFormData.append('message', JSON.stringify({
+      attachment: {
+        type: fileType || 'file',
+        payload: { is_reusable: true }
+      }
+    }));
+    tagFormData.append('filedata', blob, fileName || 'attachment');
+    const tagRes = await fetch(url, { method: 'POST', body: tagFormData });
+    const tagData = await tagRes.json();
+    if (!tagData.error) return tagData;
+  }
 
   if (data.error) throw new Error(data.error.message || 'Error sending attachment');
   return data;

@@ -1467,7 +1467,10 @@ export default function UnifiedChatCenter({
               setToastNotification(`✅ ส่งข้อความส่วนตัวเข้า Inbox ของ "${activeLead.name}" สำเร็จ!`);
             }
           }
-        } else if (activeLead.customerPsid && replyMode === 'inbox') {
+        } else if (replyMode === 'inbox') {
+          if (!activeLead.customerPsid) {
+            throw new Error('ไม่พบ Facebook Customer ID (PSID) ของลูกค้ารายนี้');
+          }
           // 3. Regular Messenger Inbox reply - Send all photos sequentially
           const filesToSend = attachmentsToSend.filter(a => a.file);
           if (filesToSend.length > 0) {
@@ -1502,8 +1505,23 @@ export default function UnifiedChatCenter({
         setTimeout(() => setToastNotification(null), 5000);
       } catch (sendErr) {
         console.warn('Facebook reply warning:', sendErr);
-        setToastNotification(`บันทึกในระบบแล้ว (หมายเหตุ Facebook: ${sendErr.message || 'ส่งผ่าน API ไม่สำเร็จ'})`);
-        setTimeout(() => setToastNotification(null), 6000);
+        const errMsg = sendErr.message || 'ส่งผ่าน API ไม่สำเร็จ';
+        setToastNotification(`⚠️ ส่งไม่ถึงลูกค้า: ${errMsg}`);
+        setTimeout(() => setToastNotification(null), 8000);
+
+        // Mark message as failed in UI so admin is aware
+        setLeads(prev => prev.map(l => {
+          if (l.id === activeLead.id) {
+            const updated = (l.messages || []).map(m => {
+              if (m.id === newMessage.id) {
+                return { ...m, failed: true, error: errMsg };
+              }
+              return m;
+            });
+            return { ...l, messages: updated };
+          }
+          return l;
+        }));
       } finally {
         setIsSendingAttachment(false);
         setSendingProgress(null);
@@ -3568,7 +3586,29 @@ export default function UnifiedChatCenter({
                           gap: '4px'
                         }}>
                           <span>{msg.time}</span>
-                          {isAdmin && <CheckCheck size={12} />}
+                          {isAdmin && (
+                            msg.failed ? (
+                              <span
+                                title={msg.error || 'ข้อความนี้ไม่ส่งถึงลูกค้า'}
+                                style={{
+                                  color: '#fca5a5',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  fontWeight: 600,
+                                  backgroundColor: 'rgba(239, 68, 68, 0.25)',
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  fontSize: '0.62rem'
+                                }}
+                              >
+                                <AlertCircle size={11} color="#ef4444" />
+                                <span>ไม่ส่งถึงลูกค้า</span>
+                              </span>
+                            ) : (
+                              <CheckCheck size={12} />
+                            )
+                          )}
                         </div>
                       </div>
 
