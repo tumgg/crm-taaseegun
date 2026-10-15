@@ -19,6 +19,8 @@ import {
   Tag,
   DollarSign,
   AlertCircle,
+  AlertTriangle,
+  Copy,
   CornerDownRight,
   Reply,
   ShieldCheck,
@@ -1315,6 +1317,77 @@ export default function UnifiedChatCenter({
   const activeClosingScore = useMemo(() => activeLead ? analyzeClosingScore(activeLead) : null, [activeLead]);
   const activeFollowUp = useMemo(() => activeLead ? detectFollowUpStatus(activeLead) : null, [activeLead]);
 
+  // 24-Hour Standard Messaging Window Status (Facebook Platform Policy)
+  const messengerWindowStatus = useMemo(() => {
+    if (!activeLead) return { isOutside24h: false, label: "" };
+
+    // Post comments have their own public reply / 1-time private reply flow
+    if (activeLead.sourceType === "post_comment") {
+      return { isComment: true, isOutside24h: false };
+    }
+
+    const messages = activeLead.messages || [];
+    const lastCustomerMsg = [...messages].reverse().find(m => m.sender === "lead" || m.sender === "customer");
+
+    if (!lastCustomerMsg) {
+      return {
+        isOutside24h: true,
+        hoursAgoText: "ไม่พบข้อความจากลูกค้า",
+        remainingText: "0 ชม.",
+        isExpired: true
+      };
+    }
+
+    const rawTime = lastCustomerMsg.created_time || lastCustomerMsg.timestamp;
+    const timestamp = rawTime ? new Date(rawTime).getTime() : NaN;
+    if (isNaN(timestamp)) {
+      return { isOutside24h: false, hoursAgoText: "", remainingText: "24 ชม.", isExpired: false };
+    }
+
+    const elapsedMs = Date.now() - timestamp;
+    const elapsedHours = elapsedMs / (1000 * 60 * 60);
+    const isOutside = elapsedHours > 24;
+    const remainingHours = Math.max(0, 24 - elapsedHours);
+
+    const hoursAgoText = elapsedHours < 1
+      ? `${Math.max(1, Math.round(elapsedHours * 60))} นาที`
+      : elapsedHours < 24
+        ? `${elapsedHours.toFixed(1)} ชม.`
+        : `${Math.floor(elapsedHours / 24)} วัน ${(elapsedHours % 24).toFixed(0)} ชม.`;
+
+    const remainingText = remainingHours < 1
+      ? `${Math.max(1, Math.round(remainingHours * 60))} นาที`
+      : `${remainingHours.toFixed(1)} ชม.`;
+
+    return {
+      isOutside24h: isOutside,
+      hoursAgoText,
+      remainingText,
+      lastCustomerMsgTime: lastCustomerMsg.time || lastCustomerMsg.created_time,
+      isExpired: isOutside
+    };
+  }, [activeLead]);
+
+  // Direct URLs to Meta Business Suite & Messenger Inbox
+  const metaBusinessSuiteUrl = useMemo(() => {
+    if (!activeLead?.channel) return "https://business.facebook.com/latest/inbox/all";
+    const pageId = activeLead.channel;
+    return `https://business.facebook.com/latest/inbox/messenger?asset_id=${pageId}&mailbox_id=${pageId}`;
+  }, [activeLead?.channel]);
+
+  const handleOpenMetaBusinessSuite = useCallback(() => {
+    if (replyText.trim()) {
+      try {
+        navigator.clipboard.writeText(replyText.trim());
+        setToastNotification("📋 คัดลอกข้อความที่คุณพิมพ์ไว้แล้ว! วางใน Meta Business Suite ได้เลย");
+        setTimeout(() => setToastNotification(null), 5000);
+      } catch (err) {
+        console.warn("Clipboard error:", err);
+      }
+    }
+    window.open(metaBusinessSuiteUrl, "_blank", "noopener,noreferrer");
+  }, [replyText, metaBusinessSuiteUrl]);
+
   const handleApplyFollowUpTemplate = (templateText) => {
     setReplyText(templateText);
     if (chatInputRef.current) {
@@ -1366,6 +1439,17 @@ export default function UnifiedChatCenter({
   const handleSendMessage = async (e) => {
     e?.preventDefault();
     if ((!replyText.trim() && selectedAttachments.length === 0) || !activeLead) return;
+
+    // Check 24-Hour Messenger Policy Window
+    if (activeLead?.isLiveFacebookLead && activeLead.sourceType !== "post_comment" && messengerWindowStatus.isOutside24h && replyMode === "inbox") {
+      const confirmSend = window.confirm(
+        `⚠️ แจ้งเตือนข้อจำกัดของ Facebook:\n\nลูกค้า "${activeLead.name}" ไม่ได้ส่งข้อความมาเกิน 24 ชั่วโมงแล้ว (ล่าสุดเมื่อ ${messengerWindowStatus.hoursAgoText}ที่แล้ว)\n\nตามนโยบายความปลอดภัย Meta ระบบภายนอกจะไม่สามารถส่งข้อความถึงลูกค้าได้และจะถูกปฏิเสธ\n\n- กด "ตกลง (OK)" เพื่อลองส่งต่อไป\n- กด "ยกเลิก (Cancel)" เพื่อเปิดตอบใน Meta Business Suite โดยตรง (ระบบคัดลอกข้อความที่คุณพิมพ์ไว้ให้อัตโนมัติ)`
+      );
+      if (!confirmSend) {
+        handleOpenMetaBusinessSuite();
+        return;
+      }
+    }
 
     const messageTextToSend = replyText.trim();
     const attachmentsToSend = [...selectedAttachments];
@@ -2464,6 +2548,56 @@ export default function UnifiedChatCenter({
                           </span>
                         )}
 
+                        {/* 24-Hour Messenger Window Badge */}
+                        {lead.isLiveFacebookLead && lead.sourceType !== 'post_comment' && (() => {
+                          const msgs = lead.messages || [];
+                          const lastCust = [...msgs].reverse().find(m => m.sender === 'lead' || m.sender === 'customer');
+                          if (!lastCust) return null;
+                          const rawT = lastCust.created_time || lastCust.timestamp;
+                          const t = rawT ? new Date(rawT).getTime() : NaN;
+                          if (isNaN(t)) return null;
+                          const isOver24h = (Date.now() - t) > 24 * 60 * 60 * 1000;
+                          return isOver24h ? (
+                            <span
+                              title="ลูกค้าไม่ได้ทักมาเกิน 24 ชม. แล้ว ต้องตอบผ่าน Meta Business Suite"
+                              style={{
+                                fontSize: '0.60rem',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                backgroundColor: '#fef3c7',
+                                color: '#b45309',
+                                fontWeight: '700',
+                                border: '1px solid #fde68a',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              ⏱️ เกิน 24 ชม.
+                            </span>
+                          ) : (
+                            <span
+                              title="อยู่ในกรอบเวลา 24 ชม. ตอบกลับผ่านระบบได้ทันที"
+                              style={{
+                                fontSize: '0.60rem',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                backgroundColor: '#dcfce7',
+                                color: '#15803d',
+                                fontWeight: '700',
+                                border: '1px solid #bbf7d0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              🟢 ใน 24 ชม.
+                            </span>
+                          );
+                        })()}
+
                         {/* PROMINENT REPLY STATUS BADGE */}
                         {!isReplied ? (
                           <span style={{
@@ -2789,6 +2923,40 @@ export default function UnifiedChatCenter({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  {/* Quick Open Meta Business Suite Button in Header */}
+                  {activeLead?.isLiveFacebookLead && (
+                    <button
+                      type="button"
+                      onClick={handleOpenMetaBusinessSuite}
+                      title="เปิดบทสนทนานี้ใน Meta Business Suite (พร้อมคัดลอกข้อความที่พิมพ์ไว้)"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '6px 11px',
+                        borderRadius: '8px',
+                        backgroundColor: messengerWindowStatus.isOutside24h ? '#fffbeb' : '#f0f7ff',
+                        color: messengerWindowStatus.isOutside24h ? '#b45309' : '#1877f2',
+                        border: messengerWindowStatus.isOutside24h ? '1px solid #fde68a' : '1px solid #bfdbfe',
+                        fontWeight: '700',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.backgroundColor = '#1877f2';
+                        e.currentTarget.style.color = '#ffffff';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.backgroundColor = messengerWindowStatus.isOutside24h ? '#fffbeb' : '#f0f7ff';
+                        e.currentTarget.style.color = messengerWindowStatus.isOutside24h ? '#b45309' : '#1877f2';
+                      }}
+                    >
+                      <ExternalLink size={13} />
+                      <span>{messengerWindowStatus.isOutside24h ? 'เปิดตอบใน Meta' : 'Meta Suite'}</span>
+                    </button>
+                  )}
                   {/* Toggle Customer Info Panel Button */}
                   <button
                     type="button"
@@ -3589,21 +3757,27 @@ export default function UnifiedChatCenter({
                           {isAdmin && (
                             msg.failed ? (
                               <span
-                                title={msg.error || 'ข้อความนี้ไม่ส่งถึงลูกค้า'}
+                                title={`${msg.error || 'ข้อความนี้ไม่ส่งถึงลูกค้า'} (คลิกเพื่อเปิดตอบใน Meta Business Suite)`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenMetaBusinessSuite();
+                                }}
                                 style={{
-                                  color: '#fca5a5',
+                                  color: '#fee2e2',
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: '3px',
-                                  fontWeight: 600,
-                                  backgroundColor: 'rgba(239, 68, 68, 0.25)',
-                                  padding: '1px 6px',
-                                  borderRadius: '4px',
-                                  fontSize: '0.62rem'
+                                  fontWeight: 700,
+                                  backgroundColor: 'rgba(239, 68, 68, 0.45)',
+                                  padding: '2px 7px',
+                                  borderRadius: '5px',
+                                  fontSize: '0.62rem',
+                                  cursor: 'pointer',
+                                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                                 }}
                               >
-                                <AlertCircle size={11} color="#ef4444" />
-                                <span>ไม่ส่งถึงลูกค้า</span>
+                                <AlertCircle size={11} color="#fca5a5" />
+                                <span>ไม่ส่งถึงลูกค้า (เปิดใน Meta ↗)</span>
                               </span>
                             ) : (
                               <CheckCheck size={12} />
@@ -3818,6 +3992,97 @@ export default function UnifiedChatCenter({
                 flexShrink: 0,
                 boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
               }}>
+                {/* 24-Hour Messenger Window Policy Banner */}
+                {activeLead?.isLiveFacebookLead && !messengerWindowStatus.isComment && (
+                  messengerWindowStatus.isOutside24h ? (
+                    <div style={{
+                      backgroundColor: '#fffbeb',
+                      border: '1.5px solid #fde68a',
+                      borderRadius: '10px',
+                      padding: '9px 13px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      boxShadow: '0 1px 3px rgba(217, 119, 6, 0.08)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          width: '30px',
+                          height: '30px',
+                          borderRadius: '8px',
+                          backgroundColor: '#fef3c7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <AlertTriangle size={17} color="#d97706" />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span>ลูกค้าไม่ได้ทักมาเกิน 24 ชั่วโมงแล้ว</span>
+                            <span style={{ fontSize: '0.70rem', backgroundColor: '#fef3c7', padding: '1px 6px', borderRadius: '4px', color: '#b45309', border: '1px solid #fde68a' }}>
+                              ทักล่าสุด {messengerWindowStatus.hoursAgoText}ที่แล้ว
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: '#78350f', marginTop: '2px', lineHeight: '1.4' }}>
+                            ตามนโยบายความปลอดภัย Facebook (24h Policy) ระบบภายนอกไม่สามารถส่งข้อความได้ กรุณาตอบผ่าน Meta Business Suite โดยตรง
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={handleOpenMetaBusinessSuite}
+                          title="เปิดตอบใน Meta Business Suite (คัดลอกข้อความที่คุณพิมพ์ไว้ให้อัตโนมัติ)"
+                          style={{
+                            backgroundColor: '#1877f2',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '6px 12px',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            boxShadow: '0 2px 6px rgba(24, 119, 242, 0.3)',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#166fe5'}
+                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1877f2'}
+                        >
+                          <span>เปิดตอบใน Meta</span>
+                          <ExternalLink size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      padding: '5px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.74rem',
+                      color: '#166534'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
+                        <span style={{ fontWeight: '700' }}>อยู่ในกรอบเวลา 24 ชม. ของ Facebook</span>
+                        <span style={{ color: '#15803d' }}>(ส่งข้อความถึงลูกค้าได้ตามปกติ)</span>
+                      </div>
+                      <span style={{ color: '#15803d', fontWeight: '700', fontSize: '0.72rem' }}>
+                        เหลือเวลาอีก {messengerWindowStatus.remainingText}
+                      </span>
+                    </div>
+                  )
+                )}
                 {/* Replying / Quoting Message Banner */}
                 {replyingToMessage && (
                   <div style={{

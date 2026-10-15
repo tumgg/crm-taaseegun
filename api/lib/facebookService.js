@@ -340,7 +340,13 @@ export async function sendFacebookReply(pageId, recipientPsid, messageText, repl
     }
   }
 
-  if (data.error) throw new Error(data.error.message || 'Error sending Facebook reply');
+  if (data.error) {
+    const msg = data.error.message || "";
+    if (data.error.code === 10 || data.error.error_subcode === 2018278 || msg.includes("window") || msg.includes("24") || msg.includes("ช่วงเวลาที่อนุญาต")) {
+      throw new Error("ลูกค้าไม่ได้ส่งข้อความมาเกิน 24 ชม. แล้ว ตามนโยบาย Facebook (24-Hour Policy) ระบบภายนอกไม่อนุญาตให้ส่งข้อความ กรุณาเปิดตอบผ่าน Meta Business Suite โดยตรง");
+    }
+    throw new Error(msg || "Error sending Facebook reply");
+  }
   return data;
 }
 
@@ -385,7 +391,13 @@ export async function sendFacebookAttachment(pageId, recipientPsid, fileBase64, 
     if (!tagData.error) return tagData;
   }
 
-  if (data.error) throw new Error(data.error.message || 'Error sending attachment');
+  if (data.error) {
+    const msg = data.error.message || "";
+    if (data.error.code === 10 || data.error.error_subcode === 2018278 || msg.includes("window") || msg.includes("24") || msg.includes("ช่วงเวลาที่อนุญาต")) {
+      throw new Error("ลูกค้าไม่ได้ส่งข้อความมาเกิน 24 ชม. แล้ว ตามนโยบาย Facebook (24-Hour Policy) ระบบภายนอกไม่อนุญาตให้ส่งไฟล์/รูปภาพ กรุณาเปิดตอบผ่าน Meta Business Suite โดยตรง");
+    }
+    throw new Error(msg || "Error sending attachment");
+  }
   return data;
 }
 
@@ -451,6 +463,12 @@ export async function sendFacebookPrivateReply(pageId, commentId, messageText) {
   });
   const data = await res.json();
 
-  if (data.error) throw new Error(data.error.message || 'Error sending private reply');
+  if (data.error) {
+    const msg = data.error.message || "";
+    if (data.error.code === 10900 || msg.includes("already received a private reply")) {
+      throw new Error("คอมเมนต์นี้เคยได้รับข้อความส่วนตัว (Private Reply) ไปแล้ว 1 ครั้ง ตามนโยบาย Facebook ไม่อนุญาตให้ส่งซ้ำ กรุณาตอบใต้คอมเมนต์หน้าเพจแทน");
+    }
+    throw new Error(msg || "Error sending private reply");
+  }
   return data;
 }
