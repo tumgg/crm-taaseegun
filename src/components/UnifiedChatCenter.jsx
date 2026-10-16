@@ -25,6 +25,7 @@ import {
   Reply,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
   Filter,
   Volume2,
   VolumeX,
@@ -38,6 +39,9 @@ import {
   Download,
   X,
   Maximize2,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
   Info,
   Plus,
   Flame,
@@ -440,7 +444,37 @@ export default function UnifiedChatCenter({
   const [selectedAttachments, setSelectedAttachments] = useState([]); // Array of { id, file, name, size, type, previewUrl }
   const [isSendingAttachment, setIsSendingAttachment] = useState(false);
   const [sendingProgress, setSendingProgress] = useState(null); // { current, total }
-  const [selectedImageModal, setSelectedImageModal] = useState(null); // { url, name, date, sender }
+  // Image Lightbox Viewer with multi-image navigation, keyboard shortcuts, zoom & thumbnails
+  const [lightboxData, setLightboxData] = useState(null); // { allImages, msgImages, images, currentIndex, activeMsgId }
+  const [lightboxZoom, setLightboxZoom] = useState(1);
+  const [lightboxRotation, setLightboxRotation] = useState(0);
+  const [lightboxScope, setLightboxScope] = useState('all'); // 'all' | 'message'
+  const lightboxThumbnailsRef = useRef(null);
+  const lightboxTouchStartX = useRef(null);
+  const lightboxTouchStartY = useRef(null);
+
+  // Backward-compatible alias for selectedImageModal
+  const selectedImageModal = useMemo(() => {
+    if (!lightboxData || !lightboxData.images || lightboxData.images.length === 0) return null;
+    return lightboxData.images[lightboxData.currentIndex] || null;
+  }, [lightboxData]);
+
+  const setSelectedImageModal = useCallback((img) => {
+    if (!img) {
+      setLightboxData(null);
+      setLightboxZoom(1);
+      setLightboxRotation(0);
+    } else {
+      setLightboxData({
+        images: [img],
+        currentIndex: 0,
+        allImages: [img],
+        msgImages: [img]
+      });
+      setLightboxZoom(1);
+      setLightboxRotation(0);
+    }
+  }, []);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
@@ -1209,10 +1243,217 @@ export default function UnifiedChatCenter({
     }
   };
 
-  // Reset quoting/reply state when switching active conversations
+  // Reset quoting/reply state & lightbox when switching active conversations
   useEffect(() => {
     setReplyingToMessage(null);
+    setLightboxData(null);
+    setLightboxZoom(1);
+    setLightboxRotation(0);
   }, [activeLead?.id]);
+
+  // Extract all normal images across the current conversation in chronological order
+  const getConversationImages = useCallback(() => {
+    if (!activeLead?.messages) return [];
+    const result = [];
+    activeLead.messages.forEach((msg, mIdx) => {
+      const isAdmin = msg.sender === 'admin';
+      const sender = isAdmin ? (msg.adminName || 'คุณ (แอดมิน)') : (activeLead.name || 'ลูกค้า');
+      const normalImgs = (msg.attachments || []).filter(a => a.type === 'image' && !a.isSticker && (a.url || a.previewUrl));
+      normalImgs.forEach((att, attIdx) => {
+        result.push({
+          id: att.id || `img-${mIdx}-${attIdx}`,
+          url: att.url || att.previewUrl,
+          previewUrl: att.previewUrl || att.url,
+          name: att.name || (normalImgs.length > 1 ? `รูปภาพที่ ${attIdx + 1}` : 'รูปภาพ'),
+          date: msg.time || '',
+          sender: sender,
+          isAdmin: isAdmin,
+          msgId: msg.id || `msg-${mIdx}`,
+          messageTotal: normalImgs.length,
+          messageImgIndex: attIdx
+        });
+      });
+    });
+    return result;
+  }, [activeLead?.messages, activeLead?.name]);
+
+  // Open Fullscreen Lightbox for an image
+  const handleOpenImageLightbox = useCallback((clickedAtt, msg, clickedIndex = 0) => {
+    const allImgs = getConversationImages();
+    const isAdmin = msg?.sender === 'admin';
+    const sender = isAdmin ? (msg?.adminName || 'คุณ (แอดมิน)') : (activeLead?.name || 'ลูกค้า');
+
+    // Extract images specifically from this message
+    const msgImgs = (msg?.attachments || [])
+      .filter(a => a.type === 'image' && !a.isSticker && (a.url || a.previewUrl))
+      .map((att, idx) => ({
+        id: att.id || `msg-img-${msg?.id || 'm'}-${idx}`,
+        url: att.url || att.previewUrl,
+        previewUrl: att.previewUrl || att.url,
+        name: att.name || (msg?.attachments?.length > 1 ? `รูปภาพที่ ${idx + 1}` : 'รูปภาพ'),
+        date: msg?.time || '',
+        sender: sender,
+        isAdmin: isAdmin,
+        msgId: msg?.id || '',
+        messageTotal: msg?.attachments?.length || 1,
+        messageImgIndex: idx
+      }));
+
+    const targetUrl = clickedAtt.url || clickedAtt.previewUrl;
+
+    // Find index in all conversation images
+    let targetIndexInAll = allImgs.findIndex(img =>
+      (clickedAtt.id && img.id === clickedAtt.id) ||
+      img.url === targetUrl ||
+      img.previewUrl === targetUrl
+    );
+    if (targetIndexInAll === -1) {
+      targetIndexInAll = 0;
+    }
+
+    setLightboxScope('all');
+    setLightboxZoom(1);
+    setLightboxRotation(0);
+    setLightboxData({
+      allImages: allImgs.length > 0 ? allImgs : msgImgs,
+      msgImages: msgImgs,
+      images: allImgs.length > 0 ? allImgs : msgImgs,
+      currentIndex: targetIndexInAll,
+      activeMsgId: msg?.id
+    });
+  }, [getConversationImages, activeLead?.name]);
+
+  // Previous image in Lightbox (loops around)
+  const handlePrevLightboxImage = useCallback(() => {
+    setLightboxData(prev => {
+      if (!prev || !prev.images || prev.images.length <= 1) return prev;
+      const newIdx = (prev.currentIndex - 1 + prev.images.length) % prev.images.length;
+      return { ...prev, currentIndex: newIdx };
+    });
+    setLightboxZoom(1);
+    setLightboxRotation(0);
+  }, []);
+
+  // Next image in Lightbox (loops around)
+  const handleNextLightboxImage = useCallback(() => {
+    setLightboxData(prev => {
+      if (!prev || !prev.images || prev.images.length <= 1) return prev;
+      const newIdx = (prev.currentIndex + 1) % prev.images.length;
+      return { ...prev, currentIndex: newIdx };
+    });
+    setLightboxZoom(1);
+    setLightboxRotation(0);
+  }, []);
+
+  // Jump to specific index in Lightbox
+  const handleSelectLightboxIndex = useCallback((index) => {
+    setLightboxData(prev => {
+      if (!prev || !prev.images || index < 0 || index >= prev.images.length) return prev;
+      return { ...prev, currentIndex: index };
+    });
+    setLightboxZoom(1);
+    setLightboxRotation(0);
+  }, []);
+
+  // Switch between All Images and Message Images
+  const handleToggleLightboxScope = useCallback((newScope) => {
+    if (!lightboxData) return;
+    setLightboxScope(newScope);
+    setLightboxZoom(1);
+    setLightboxRotation(0);
+
+    const targetList = newScope === 'message' && lightboxData.msgImages?.length > 0
+      ? lightboxData.msgImages
+      : lightboxData.allImages;
+
+    const currentActiveImg = lightboxData.images[lightboxData.currentIndex];
+    let newIdx = 0;
+    if (currentActiveImg) {
+      const found = targetList.findIndex(img =>
+        img.id === currentActiveImg.id ||
+        img.url === currentActiveImg.url ||
+        img.previewUrl === currentActiveImg.url
+      );
+      if (found !== -1) newIdx = found;
+    }
+
+    setLightboxData(prev => ({
+      ...prev,
+      images: targetList,
+      currentIndex: newIdx
+    }));
+  }, [lightboxData]);
+
+  // Keyboard navigation & controls for Lightbox
+  useEffect(() => {
+    if (!lightboxData) return;
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.key === 'Escape') {
+        setLightboxData(null);
+        setLightboxZoom(1);
+        setLightboxRotation(0);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrevLightboxImage();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNextLightboxImage();
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setLightboxZoom(z => Math.min(z + 0.5, 3));
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        setLightboxZoom(z => Math.max(z - 0.5, 1));
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setLightboxZoom(1);
+        setLightboxRotation(0);
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setLightboxRotation(r => (r + 90) % 360);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxData, handlePrevLightboxImage, handleNextLightboxImage]);
+
+  // Auto-scroll active thumbnail into view
+  useEffect(() => {
+    if (lightboxData && lightboxThumbnailsRef.current) {
+      const activeThumb = lightboxThumbnailsRef.current.querySelector('[data-active="true"]');
+      if (activeThumb) {
+        activeThumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    }
+  }, [lightboxData?.currentIndex, lightboxData?.images]);
+
+  // Touch Swipe for Mobile & Tablet
+  const handleLightboxTouchStart = (e) => {
+    if (e.touches && e.touches[0]) {
+      lightboxTouchStartX.current = e.touches[0].clientX;
+      lightboxTouchStartY.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleLightboxTouchEnd = (e) => {
+    if (lightboxTouchStartX.current === null) return;
+    if (e.changedTouches && e.changedTouches[0]) {
+      const diffX = e.changedTouches[0].clientX - lightboxTouchStartX.current;
+      const diffY = e.changedTouches[0].clientY - lightboxTouchStartY.current;
+      if (Math.abs(diffX) > 35 && Math.abs(diffX) > Math.abs(diffY)) {
+        if (diffX > 0) {
+          handlePrevLightboxImage();
+        } else {
+          handleNextLightboxImage();
+        }
+      }
+    }
+    lightboxTouchStartX.current = null;
+    lightboxTouchStartY.current = null;
+  };
 
   // Auto-expand chat input textarea to show 4-5 lines comfortably and adjust smoothly
   useEffect(() => {
@@ -3558,14 +3799,23 @@ export default function UnifiedChatCenter({
                               </div>
                               {/* Thumbnail preview if replied to image */}
                               {msg.replyTo.attachments?.some(a => a.type === 'image') && (
-                                <div style={{
-                                  width: '32px',
-                                  height: '32px',
-                                  borderRadius: '4px',
-                                  overflow: 'hidden',
-                                  flexShrink: 0,
-                                  backgroundColor: '#000000'
-                                }}>
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const repImg = msg.replyTo.attachments.find(a => a.type === 'image');
+                                    if (repImg) handleOpenImageLightbox(repImg, msg.replyTo, 0);
+                                  }}
+                                  title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '4px',
+                                    overflow: 'hidden',
+                                    flexShrink: 0,
+                                    backgroundColor: '#000000',
+                                    cursor: 'pointer'
+                                  }}
+                                >
                                   <img
                                     src={msg.replyTo.attachments.find(a => a.type === 'image')?.previewUrl || msg.replyTo.attachments.find(a => a.type === 'image')?.url}
                                     alt="thumb"
@@ -3601,12 +3851,7 @@ export default function UnifiedChatCenter({
                                   {normalImages.map((att, imgIdx) => (
                                     <div
                                       key={att.id || imgIdx}
-                                      onClick={() => setSelectedImageModal({
-                                        url: att.url || att.previewUrl,
-                                        name: att.name || `รูปภาพที่ ${imgIdx + 1}`,
-                                        date: msg.time,
-                                        sender: isAdmin ? (msg.adminName || 'แอดมิน') : activeLead.name
-                                      })}
+                                      onClick={() => handleOpenImageLightbox(att, msg, imgIdx)}
                                       style={{
                                         position: 'relative',
                                         height: normalImages.length > 2 ? '105px' : '135px',
@@ -3616,7 +3861,7 @@ export default function UnifiedChatCenter({
                                         borderRadius: '6px',
                                         border: isAdmin ? '1px solid rgba(255,255,255,0.2)' : '1px solid #e2e8f0'
                                       }}
-                                      title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                                      title="คลิกเพื่อดูรูปภาพขนาดใหญ่ (เลื่อนดูรูปอื่นๆ ได้)"
                                     >
                                       <img
                                         src={att.previewUrl || att.url}
@@ -3653,12 +3898,7 @@ export default function UnifiedChatCenter({
                                 normalImages.map((att, attIdx) => (
                                   <div
                                     key={att.id || attIdx}
-                                    onClick={() => setSelectedImageModal({
-                                      url: att.url || att.previewUrl,
-                                      name: att.name || 'รูปภาพ',
-                                      date: msg.time,
-                                      sender: isAdmin ? (msg.adminName || 'แอดมิน') : activeLead.name
-                                    })}
+                                    onClick={() => handleOpenImageLightbox(att, msg, attIdx)}
                                     style={{
                                       position: 'relative',
                                       borderRadius: '10px',
@@ -5304,142 +5544,587 @@ export default function UnifiedChatCenter({
         )}
       </div>
 
-      {/* Full-Screen Image Lightbox Modal */}
-      {selectedImageModal && (
-        <div
-          onClick={() => setSelectedImageModal(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.88)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 99999,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-            animation: 'fadeIn 0.2s ease-out'
-          }}
-        >
-          {/* Modal Header */}
+      {/* Full-Screen Enhanced Multi-Image Lightbox Modal */}
+      {lightboxData && (lightboxData.images?.[lightboxData.currentIndex] || selectedImageModal) && (() => {
+        const activeLightboxImage = lightboxData.images?.[lightboxData.currentIndex] || selectedImageModal;
+        const hasMultipleImages = !!(lightboxData.images && lightboxData.images.length > 1);
+        const canToggleScope = !!(lightboxData.msgImages && lightboxData.allImages && lightboxData.msgImages.length > 1 && lightboxData.allImages.length > lightboxData.msgImages.length);
+
+        return (
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => {
+              setLightboxData(null);
+              setLightboxZoom(1);
+              setLightboxRotation(0);
+            }}
+            onTouchStart={handleLightboxTouchStart}
+            onTouchEnd={handleLightboxTouchEnd}
             style={{
-              width: '100%',
-              maxWidth: '900px',
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(8, 14, 26, 0.94)',
+              backdropFilter: 'blur(12px)',
+              zIndex: 99999,
               display: 'flex',
-              alignItems: 'center',
+              flexDirection: 'column',
               justifyContent: 'space-between',
-              color: '#ffffff',
-              marginBottom: '12px'
+              alignItems: 'center',
+              padding: '12px 16px',
+              userSelect: 'none',
+              animation: 'fadeIn 0.2s ease-out'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: '700', fontSize: '0.96rem' }}>{selectedImageModal.sender}</span>
-              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>• {selectedImageModal.date}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {activeLead && (
-                <button
-                  onClick={() => {
-                    handleUpdateLeadField('avatar', selectedImageModal.url);
-                    setToastNotification(`📷 ตั้งรูปภาพนี้เป็นรูปโปรไฟล์ของ "${activeLead.name}" เรียบร้อยแล้ว`);
-                    setTimeout(() => setToastNotification(null), 3000);
-                    setSelectedImageModal(null);
+            {/* Modal Header */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '1200px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: '#ffffff',
+                gap: '12px',
+                flexWrap: 'wrap',
+                zIndex: 10,
+                padding: '4px 8px'
+              }}
+            >
+              {/* Sender & Context Info */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontWeight: '700', fontSize: '0.96rem' }}>
+                    {activeLightboxImage.sender}
+                  </span>
+                  {activeLightboxImage.date && (
+                    <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                      • {activeLightboxImage.date}
+                    </span>
+                  )}
+                </div>
+
+                {/* Image Counter Badge */}
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    padding: '3px 9px',
+                    borderRadius: '12px',
+                    fontSize: '0.78rem',
+                    fontWeight: '600',
+                    color: '#e2e8f0'
                   }}
+                >
+                  <ImageIcon size={13} style={{ color: '#60a5fa' }} />
+                  <span>
+                    รูปที่ {lightboxData.currentIndex + 1} จาก {lightboxData.images.length} รูป
+                  </span>
+                </div>
+
+                {/* Scope Switcher (All vs This Message) */}
+                {canToggleScope && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                      padding: '2px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.12)'
+                    }}
+                  >
+                    <button
+                      onClick={() => handleToggleLightboxScope('all')}
+                      style={{
+                        padding: '4px 9px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        backgroundColor: lightboxScope === 'all' ? '#2563eb' : 'transparent',
+                        color: '#ffffff',
+                        fontSize: '0.74rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="ดูรูปภาพทั้งหมดในบทสนทนานี้"
+                    >
+                      ทั้งหมดในแชท ({lightboxData.allImages.length})
+                    </button>
+                    <button
+                      onClick={() => handleToggleLightboxScope('message')}
+                      style={{
+                        padding: '4px 9px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        backgroundColor: lightboxScope === 'message' ? '#2563eb' : 'transparent',
+                        color: '#ffffff',
+                        fontSize: '0.74rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="ดูเฉพาะรูปภาพในข้อความที่กดเปิด"
+                    >
+                      เฉพาะข้อความนี้ ({lightboxData.msgImages.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions / Tools */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {activeLead && (
+                  <button
+                    onClick={() => {
+                      handleUpdateLeadField('avatar', activeLightboxImage.url);
+                      setToastNotification(`📷 ตั้งรูปภาพนี้เป็นรูปโปรไฟล์ของ "${activeLead.name}" เรียบร้อยแล้ว`);
+                      setTimeout(() => setToastNotification(null), 3000);
+                      setLightboxData(null);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '7px',
+                      backgroundColor: '#2563eb',
+                      color: '#ffffff',
+                      fontSize: '0.8rem',
+                      fontWeight: '700',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                    title="ใช้รูปนี้เป็นรูปโปรไฟล์ของลูกค้าคนนี้"
+                  >
+                    <Camera size={14} /> {!isMobile && <span>ตั้งเป็นรูปโปรไฟล์ลูกค้า</span>}
+                  </button>
+                )}
+
+                {/* Rotate Button */}
+                <button
+                  onClick={() => setLightboxRotation(r => (r + 90) % 360)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    backgroundColor: '#2563eb',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '7px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
                     color: '#ffffff',
-                    fontSize: '0.82rem',
-                    fontWeight: '700',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'background-color 0.2s'
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                  title="ใช้รูปนี้เป็นรูปโปรไฟล์ของลูกค้าคนนี้"
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)'}
+                  title="หมุนรูปภาพ 90 องศา (คีย์ลัด: R)"
                 >
-                  <Camera size={14} /> ตั้งเป็นรูปโปรไฟล์ลูกค้า
+                  <RotateCw size={14} /> {!isMobile && <span>หมุนรูป</span>}
+                </button>
+
+                {/* Zoom Controls */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    borderRadius: '7px',
+                    padding: '2px 4px'
+                  }}
+                >
+                  <button
+                    onClick={() => setLightboxZoom(z => Math.max(z - 0.5, 1))}
+                    disabled={lightboxZoom <= 1}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: lightboxZoom <= 1 ? '#64748b' : '#ffffff',
+                      cursor: lightboxZoom <= 1 ? 'default' : 'pointer',
+                      padding: '4px 6px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="ย่อขนาด (-)"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+                  <button
+                    onClick={() => setLightboxZoom(1)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#e2e8f0',
+                      fontSize: '0.74rem',
+                      fontWeight: '700',
+                      padding: '0 4px',
+                      cursor: 'pointer',
+                      minWidth: '42px',
+                      textAlign: 'center'
+                    }}
+                    title="รีเซ็ตขนาด 100% (กด 0)"
+                  >
+                    {Math.round(lightboxZoom * 100)}%
+                  </button>
+                  <button
+                    onClick={() => setLightboxZoom(z => Math.min(z + 0.5, 3))}
+                    disabled={lightboxZoom >= 3}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: lightboxZoom >= 3 ? '#64748b' : '#ffffff',
+                      cursor: lightboxZoom >= 3 ? 'default' : 'pointer',
+                      padding: '4px 6px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="ขยายขนาด (+)"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+                </div>
+
+                {/* Download Button */}
+                <a
+                  href={activeLightboxImage.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={activeLightboxImage.name || 'image.jpg'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 11px',
+                    borderRadius: '7px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+                    color: '#ffffff',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    textDecoration: 'none',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.28)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.16)'}
+                  title="ดาวน์โหลดรูปภาพต้นฉบับ"
+                >
+                  <Download size={14} /> {!isMobile && <span>ดาวน์โหลด</span>}
+                </a>
+
+                {/* Open in New Window */}
+                <a
+                  href={activeLightboxImage.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '6px 8px',
+                    borderRadius: '7px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    color: '#ffffff',
+                    textDecoration: 'none',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  title="เปิดรูปในแท็บใหม่"
+                >
+                  <ExternalLink size={14} />
+                </a>
+
+                {/* Close Button */}
+                <button
+                  onClick={() => {
+                    setLightboxData(null);
+                    setLightboxZoom(1);
+                    setLightboxRotation(0);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '7px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.7)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  title="ปิด (Esc)"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Viewer Area (Floating Prev/Next Buttons + Main Image) */}
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                minHeight: 0,
+                padding: '6px 0'
+              }}
+            >
+              {/* Previous Image Floating Button */}
+              {hasMultipleImages && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevLightboxImage();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: isMobile ? '8px' : '20px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 30,
+                    width: isMobile ? '40px' : '50px',
+                    height: isMobile ? '40px' : '50px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.28)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2563eb';
+                    e.currentTarget.style.borderColor = '#60a5fa';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.82)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.28)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.0)';
+                  }}
+                  title="รูปก่อนหน้า (ปุ่มลูกศรซ้าย ← หรือปัดขวา)"
+                >
+                  <ChevronLeft size={isMobile ? 24 : 30} />
                 </button>
               )}
-              <a
-                href={selectedImageModal.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                download={selectedImageModal.name || 'image.jpg'}
+
+              {/* Central Zoomable / Rotatable Image */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxZoom(z => z > 1 ? 1 : 2);
+                }}
                 style={{
+                  maxWidth: '90vw',
+                  maxHeight: hasMultipleImages ? 'calc(75vh - 50px)' : '80vh',
                   display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '12px',
+                  overflow: lightboxZoom > 1 ? 'auto' : 'hidden',
+                  transition: 'transform 0.2s ease',
+                  transform: `rotate(${lightboxRotation}deg) scale(${lightboxZoom})`,
+                  cursor: lightboxZoom > 1 ? 'grab' : 'zoom-in',
+                  boxShadow: '0 25px 60px rgba(0,0,0,0.6)'
+                }}
+                title={lightboxZoom > 1 ? 'ดับเบิลคลิกเพื่อรีเซ็ตขนาด' : 'ดับเบิลคลิกเพื่อซูมขยาย'}
+              >
+                <img
+                  src={activeLightboxImage.url}
+                  alt={activeLightboxImage.name || 'Full View'}
+                  key={activeLightboxImage.url || lightboxData.currentIndex}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: hasMultipleImages ? 'calc(75vh - 50px)' : '80vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    borderRadius: '8px',
+                    userSelect: 'none',
+                    animation: 'fadeIn 0.18s ease-out'
+                  }}
+                />
+              </div>
+
+              {/* Next Image Floating Button */}
+              {hasMultipleImages && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextLightboxImage();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: isMobile ? '8px' : '20px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 30,
+                    width: isMobile ? '40px' : '50px',
+                    height: isMobile ? '40px' : '50px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.28)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2563eb';
+                    e.currentTarget.style.borderColor = '#60a5fa';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.82)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.28)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.0)';
+                  }}
+                  title="รูปถัดไป (ปุ่มลูกศรขวา → หรือปัดซ้าย)"
+                >
+                  <ChevronRight size={isMobile ? 24 : 30} />
+                </button>
+              )}
+            </div>
+
+            {/* Bottom Bar: Thumbnail Carousel Tray & Navigation Hints */}
+            {hasMultipleImages && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: '100%',
+                  maxWidth: '920px',
+                  display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                  color: '#ffffff',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  transition: 'background-color 0.2s'
+                  zIndex: 10
                 }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.18)'}
               >
-                <Download size={14} /> ดาวน์โหลดรูปต้นฉบับ
-              </a>
-              <button
-                onClick={() => setSelectedImageModal(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                title="ปิด (Esc)"
-              >
-                <X size={24} />
-              </button>
-            </div>
-          </div>
+                {/* Horizontal Scrollable Thumbnail Carousel */}
+                <div
+                  ref={lightboxThumbnailsRef}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 12px',
+                    maxWidth: '100%',
+                    overflowX: 'auto',
+                    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: '14px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                    scrollbarWidth: 'thin'
+                  }}
+                >
+                  {lightboxData.images.map((img, idx) => {
+                    const isActive = idx === lightboxData.currentIndex;
+                    return (
+                      <div
+                        key={img.id || idx}
+                        data-active={isActive ? 'true' : 'false'}
+                        onClick={() => handleSelectLightboxIndex(idx)}
+                        style={{
+                          position: 'relative',
+                          width: isMobile ? '48px' : '56px',
+                          height: isMobile ? '48px' : '56px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                          border: isActive ? '2.5px solid #3b82f6' : '1.5px solid rgba(255, 255, 255, 0.2)',
+                          boxShadow: isActive ? '0 0 14px rgba(59, 130, 246, 0.7)' : 'none',
+                          transform: isActive ? 'scale(1.08)' : 'scale(1.0)',
+                          opacity: isActive ? 1 : 0.65,
+                          transition: 'all 0.18s ease',
+                          backgroundColor: '#0f172a'
+                        }}
+                        onMouseOver={(e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.opacity = '1';
+                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                          }
+                        }}
+                        onMouseOut={(e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.opacity = '0.65';
+                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                          }
+                        }}
+                        title={`รูปที่ ${idx + 1}`}
+                      >
+                        <img
+                          src={img.previewUrl || img.url}
+                          alt={`thumb-${idx + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block'
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '2px',
+                            right: '2px',
+                            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                            color: '#ffffff',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            fontSize: '0.6rem',
+                            fontWeight: '700',
+                            lineHeight: '1'
+                          }}
+                        >
+                          #{idx + 1}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-          {/* Modal Image */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: '92vw',
-              maxHeight: '82vh',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 25px 60px rgba(0,0,0,0.6)'
-            }}
-          >
-            <img
-              src={selectedImageModal.url}
-              alt="Full View"
-              style={{
-                maxWidth: '100%',
-                maxHeight: '82vh',
-                objectFit: 'contain',
-                display: 'block',
-                borderRadius: '8px'
-              }}
-            />
+                {/* Navigation Hints */}
+                <div
+                  style={{
+                    color: '#94a3b8',
+                    fontSize: '0.72rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    textAlign: 'center'
+                  }}
+                >
+                  <span>💡 กดปุ่มลูกศร <b>←</b> <b>→</b> บนคีย์บอร์ด หรือปัดหน้าจอเพื่อเลื่อนดูรูป</span>
+                  {!isMobile && <span>• ดับเบิลคลิกเพื่อซูม</span>}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Portfolio & Texture Color Catalog Modal */}
       <PortfolioCatalogModal

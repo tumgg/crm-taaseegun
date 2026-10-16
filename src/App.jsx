@@ -514,6 +514,9 @@ export default function App() {
           <MediaKitAnalytics
             facebookPages={facebookPages}
             onSelectPageForCrm={handleSelectPageForCrm}
+            leads={leads}
+            setLeads={setLeads}
+            onOpenChat={handleOpenChat}
           />
         )}
 

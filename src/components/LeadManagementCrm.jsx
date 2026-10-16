@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { leadStatusOptions, interactionTypeOptions } from '../data/mockData';
 import { CustomerAvatar } from './UnifiedChatCenter';
+import DailyPerformanceReport, { isWonStatus } from './DailyPerformanceReport';
 
 export default function LeadManagementCrm({ 
   leads, 
@@ -36,6 +37,7 @@ export default function LeadManagementCrm({
   setSelectedChannelFilter,
   onOpenChat
 }) {
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'daily_report'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
   const [selectedSourceTypeFilter, setSelectedSourceTypeFilter] = useState('all'); // 'all', 'inbox', 'post_comment', 'video_comment'
@@ -99,9 +101,14 @@ export default function LeadManagementCrm({
 
   // Quick Status Change Handler
   const handleStatusChange = (leadId, newStatus) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
     setLeads(prev => prev.map(lead => {
       if (lead.id === leadId) {
-        return { ...lead, status: newStatus };
+        return {
+          ...lead,
+          status: newStatus,
+          wonDate: isWonStatus(newStatus) ? (lead.wonDate || todayStr) : lead.wonDate
+        };
       }
       return lead;
     }));
@@ -250,22 +257,109 @@ export default function LeadManagementCrm({
         </div>
       )}
 
-      {/* Title & Introduction */}
-      <div style={{ marginBottom: '22px' }}>
-        <h2 style={{
-          fontSize: '1.6rem',
-          fontWeight: '800',
-          letterSpacing: '-0.02em',
-          color: '#0f172a',
-          marginBottom: '4px'
+      {/* Title & Introduction + View Switcher */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px',
+        marginBottom: '22px'
+      }}>
+        <div>
+          <h2 style={{
+            fontSize: '1.6rem',
+            fontWeight: '800',
+            letterSpacing: '-0.02em',
+            color: '#0f172a',
+            marginBottom: '4px'
+          }}>
+            {viewMode === 'daily_report'
+              ? 'สรุปสถิติคนทัก & ยอดปิดจ็อบรายวัน (Daily Deals Report)'
+              : 'ตารางรวบรวมข้อความลูกค้า (Inbox + คอมเมนต์หน้าเพจ & ใต้คลิป)'}
+          </h2>
+          <p style={{ fontSize: '0.88rem', color: '#64748b', margin: 0 }}>
+            {viewMode === 'daily_report'
+              ? 'ดูจำนวนลูกค้าที่ทักเข้ามาในแต่ละวัน แยกตามเพจ และจำนวนคนที่ปิดการขาย/จบงานได้สำเร็จ'
+              : 'รวบรวมทุกข้อความที่ลูกค้าทักเข้ามา ไม่ว่าจะเป็น Inbox แชทหลังบ้าน หรือคอมเมนต์ จากทุกเพจของคุณไว้ที่เดียว'}
+          </p>
+        </div>
+
+        {/* View Switcher: Table List vs Daily Breakdown Report */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          backgroundColor: '#f1f5f9',
+          padding: '4px',
+          borderRadius: '11px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
         }}>
-          ตารางรวบรวมข้อความลูกค้า (Inbox + คอมเมนต์หน้าเพจ & ใต้คลิป)
-        </h2>
-        <p style={{ fontSize: '0.88rem', color: '#64748b' }}>
-          รวบรวมทุกข้อความที่ลูกค้าทักเข้ามา ไม่ว่าจะเป็น <strong>Inbox แชทหลังบ้าน</strong>, <strong>คอมเมนต์ใต้โพสต์หน้าเพจ</strong>, หรือ <strong>คอมเมนต์ใต้คลิปวิดีโอ/Reels/Shorts/TikTok</strong> จากทุกเพจของคุณไว้ที่เดียว
-        </p>
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              fontSize: '0.84rem',
+              fontWeight: viewMode === 'table' ? '800' : '600',
+              backgroundColor: viewMode === 'table' ? '#ffffff' : 'transparent',
+              color: viewMode === 'table' ? '#0f172a' : '#64748b',
+              boxShadow: viewMode === 'table' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>📋 รายชื่อลูกค้า ({leads.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('daily_report')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              fontSize: '0.84rem',
+              fontWeight: viewMode === 'daily_report' ? '800' : '600',
+              backgroundColor: viewMode === 'daily_report' ? '#10b981' : 'transparent',
+              color: viewMode === 'daily_report' ? '#ffffff' : '#64748b',
+              boxShadow: viewMode === 'daily_report' ? '0 2px 6px rgba(16, 185, 129, 0.3)' : 'none',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>📅 สรุปยอดรายวัน แยกเพจ</span>
+            <span style={{
+              backgroundColor: viewMode === 'daily_report' ? 'rgba(255,255,255,0.25)' : '#10b981',
+              color: '#ffffff',
+              padding: '1px 6px',
+              borderRadius: '999px',
+              fontSize: '0.68rem',
+              fontWeight: '800'
+            }}>
+              ใหม่ ✨
+            </span>
+          </button>
+        </div>
       </div>
 
+      {viewMode === 'daily_report' ? (
+        <DailyPerformanceReport
+          leads={leads}
+          setLeads={setLeads}
+          facebookPages={facebookPages}
+          onOpenChat={onOpenChat}
+        />
+      ) : (
+        <>
       {/* CRM Highlight Cards */}
       <div style={{
         display: 'grid',
@@ -834,6 +928,8 @@ export default function LeadManagementCrm({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Edit / Quick Note Modal */}
       {activeLeadModal && (

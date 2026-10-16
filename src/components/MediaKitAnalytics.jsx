@@ -19,8 +19,16 @@ import {
   tiktokAnalytics, 
   instagramAnalytics 
 } from '../data/mockData';
+import DailyPerformanceReport from './DailyPerformanceReport';
 
-export default function MediaKitAnalytics({ facebookPages, onSelectPageForCrm }) {
+export default function MediaKitAnalytics({ 
+  facebookPages, 
+  onSelectPageForCrm,
+  leads = [],
+  setLeads,
+  onOpenChat
+}) {
+  const [activeReportTab, setActiveReportTab] = useState('daily_report'); // 'daily_report' | 'social_reach'
   const [selectedPlatform, setSelectedPlatform] = useState('facebook');
   const [selectedFbPageId, setSelectedFbPageId] = useState('all');
   const [ageSegment, setAgeSegment] = useState('all'); // 'all', 'men', 'women'
@@ -109,6 +117,84 @@ export default function MediaKitAnalytics({ facebookPages, onSelectPageForCrm })
 
   return (
     <div className="animate-fade-in">
+      {/* Top Level Sub-Tab Navigation: Daily Deals Report VS Social Media Kit */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        backgroundColor: '#f1f5f9',
+        padding: '5px',
+        borderRadius: '12px',
+        marginBottom: '24px',
+        width: 'fit-content',
+        flexWrap: 'wrap'
+      }}>
+        <button
+          type="button"
+          onClick={() => setActiveReportTab('daily_report')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 18px',
+            borderRadius: '9px',
+            fontSize: '0.88rem',
+            fontWeight: activeReportTab === 'daily_report' ? '800' : '600',
+            backgroundColor: activeReportTab === 'daily_report' ? '#ffffff' : 'transparent',
+            color: activeReportTab === 'daily_report' ? '#059669' : '#64748b',
+            boxShadow: activeReportTab === 'daily_report' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Calendar size={16} color={activeReportTab === 'daily_report' ? '#059669' : '#64748b'} />
+          <span>📊 สรุปยอดคนทัก & ปิดจ็อบรายวัน (Daily Deals Report)</span>
+          <span style={{
+            backgroundColor: activeReportTab === 'daily_report' ? '#10b981' : '#e2e8f0',
+            color: activeReportTab === 'daily_report' ? '#ffffff' : '#64748b',
+            padding: '1px 7px',
+            borderRadius: '999px',
+            fontSize: '0.68rem',
+            fontWeight: '800'
+          }}>
+            แนะนำ ✨
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveReportTab('social_reach')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 18px',
+            borderRadius: '9px',
+            fontSize: '0.88rem',
+            fontWeight: activeReportTab === 'social_reach' ? '800' : '600',
+            backgroundColor: activeReportTab === 'social_reach' ? '#ffffff' : 'transparent',
+            color: activeReportTab === 'social_reach' ? '#1877f2' : '#64748b',
+            boxShadow: activeReportTab === 'social_reach' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Layers size={16} color={activeReportTab === 'social_reach' ? '#1877f2' : '#64748b'} />
+          <span>🌐 สถิติผู้ติดตาม & Demographics (Media Kit)</span>
+        </button>
+      </div>
+
+      {activeReportTab === 'daily_report' ? (
+        <DailyPerformanceReport
+          leads={leads}
+          setLeads={setLeads}
+          facebookPages={facebookPages}
+          onOpenChat={onOpenChat}
+        />
+      ) : (
+        <>
       {/* Title & Realtime indicator matching reference image */}
       <div style={{ marginBottom: '22px' }}>
         <h2 style={{
@@ -839,6 +925,8 @@ export default function MediaKitAnalytics({ facebookPages, onSelectPageForCrm })
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

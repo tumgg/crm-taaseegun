@@ -19,6 +19,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { getPageTheme, CustomerAvatar } from './UnifiedChatCenter';
+import { isWonStatus } from './DailyPerformanceReport';
 
 export const isFollowUpDue = (followUpDate) => {
   if (!followUpDate) return false;
@@ -199,11 +200,15 @@ export default function SalesPipelineKanban({
     const leadId = e.dataTransfer.getData('text/plain') || draggedLeadId;
     if (!leadId) return;
 
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isWon = isWonStatus(targetStageId);
+
     setLeads(prev => prev.map(lead => {
       if (lead.id === leadId) {
         return {
           ...lead,
-          status: targetStageId
+          status: targetStageId,
+          wonDate: isWon ? (lead.wonDate || todayStr) : lead.wonDate
         };
       }
       return lead;
@@ -214,7 +219,13 @@ export default function SalesPipelineKanban({
 
   // Quick Move stage via button
   const handleMoveStage = (leadId, nextStageId) => {
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: nextStageId } : l));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isWon = isWonStatus(nextStageId);
+    setLeads(prev => prev.map(l => l.id === leadId ? {
+      ...l,
+      status: nextStageId,
+      wonDate: isWon ? (l.wonDate || todayStr) : l.wonDate
+    } : l));
   };
 
   // Deal Value Inline Editing

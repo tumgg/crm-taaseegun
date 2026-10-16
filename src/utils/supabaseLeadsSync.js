@@ -40,7 +40,8 @@ export function mapDbToLead(row) {
     isLiveFacebookLead: Boolean(row.is_live_facebook_lead ?? row.isLiveFacebookLead),
     messages: Array.isArray(row.messages) ? row.messages : [],
     customerRole: row.customer_role || row.customerRole || '',
-    phone: row.phone || ''
+    phone: row.phone || '',
+    wonDate: row.won_date || row.wonDate || null
   };
 }
 
@@ -79,6 +80,7 @@ export function mapLeadToDb(lead) {
     messages: Array.isArray(lead.messages) ? lead.messages : [],
     customer_role: lead.customerRole || '',
     phone: lead.phone || '',
+    won_date: lead.wonDate || null,
     updated_at: new Date().toISOString()
   };
 }
