@@ -95,6 +95,25 @@ export function formatThaiDate(dateStr, includeWeekday = true) {
   return `${prefix}${weekday}${day} ${thaiMonths[month]} ${thaiYear}`;
 }
 
+// Helper: Extract first inquiry date from lead messages history
+export function getLeadFirstContactDate(lead) {
+  if (Array.isArray(lead?.messages) && lead.messages.length > 0) {
+    const firstMsg = lead.messages[0];
+    const timeVal = firstMsg?.created_time || (firstMsg?.timestamp ? new Date(firstMsg.timestamp).toISOString() : null);
+    if (timeVal) {
+      const match = String(timeVal).match(/^\d{4}-\d{2}-\d{2}/);
+      if (match) return match[0];
+    }
+  }
+  return getLeadDateKey(lead);
+}
+
+// Helper: Check if lead first contacted on a specific date
+export function isBrandNewLeadOnDate(lead, dateKey) {
+  const firstDate = getLeadFirstContactDate(lead);
+  return firstDate === dateKey;
+}
+
 export default function DailyPerformanceReport({
   leads = [],
   setLeads,
@@ -103,11 +122,12 @@ export default function DailyPerformanceReport({
 }) {
   const [dateRangePreset, setDateRangePreset] = useState('7days'); // 'today', 'yesterday', '7days', '14days', '30days', 'this_month', 'all', 'custom'
   const [selectedChannel, setSelectedChannel] = useState('all');
+  const [inboundTypeFilter, setInboundTypeFilter] = useState('all'); // 'all' (ทุกคนที่ทัก 32) | 'new_only' (ทักใหม่เอี่ยม 21)
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [viewMode, setViewMode] = useState('daily_list'); // 'daily_list', 'cross_page_matrix'
   const [activeCustomerModal, setActiveCustomerModal] = useState(null); // { date: string, channel: string, leads: [] }
-  const [modalFilter, setModalFilter] = useState('all'); // 'all', 'won', 'pipeline'
+  const [modalFilter, setModalFilter] = useState('all'); // 'all', 'new_only', 'returning', 'won', 'pipeline'
   const [editingDealId, setEditingDealId] = useState(null);
   const [editDealValue, setEditDealValue] = useState('');
 
@@ -182,10 +202,12 @@ export default function DailyPerformanceReport({
 
   // Aggregate leads by date and channel
   const { dailyStats, totals, crossPageMatrix, sortedDates } = useMemo(() => {
-    const dateMap = new Map(); // dateKey -> { totalInbound, totalWon, totalPipeline, totalRevenue, pages: Map(channelId -> { inbound, won, revenue, leads: [] }) }
+    const dateMap = new Map(); // dateKey -> { totalInbound, newInbound, returningInbound, totalWon, totalPipeline, totalRevenue, pages: Map(channelId -> { inbound, newInbound, returningInbound, won, revenue, leads: [] }) }
     const pagesSet = new Set();
 
     let grandInbound = 0;
+    let grandNewInbound = 0;
+    let grandReturningInbound = 0;
     let grandWon = 0;
     let grandPipeline = 0;
     let grandRevenue = 0;
@@ -210,6 +232,8 @@ export default function DailyPerformanceReport({
         dateMap.set(dateKey, {
           date: dateKey,
           totalInbound: 0,
+          newInbound: 0,
+          returningInbound: 0,
           totalWon: 0,
           totalPipeline: 0,
           totalRevenue: 0,
@@ -219,9 +243,16 @@ export default function DailyPerformanceReport({
       }
 
       const dayObj = dateMap.get(dateKey);
+      const isBrandNew = isBrandNewLeadOnDate(lead, dateKey);
+
       dayObj.totalInbound += 1;
+      if (isBrandNew) dayObj.newInbound += 1;
+      else dayObj.returningInbound += 1;
+
       dayObj.allLeads.push(lead);
       grandInbound += 1;
+      if (isBrandNew) grandNewInbound += 1;
+      else grandReturningInbound += 1;
 
       const isWon = isWonStatus(lead.status);
       const dealVal = Number(lead.dealValue) || 0;
@@ -242,6 +273,8 @@ export default function DailyPerformanceReport({
           channelId,
           channelName,
           inbound: 0,
+          newInbound: 0,
+          returningInbound: 0,
           won: 0,
           pipeline: 0,
           revenue: 0,
@@ -250,6 +283,8 @@ export default function DailyPerformanceReport({
       }
       const pageDayObj = dayObj.pages.get(channelId);
       pageDayObj.inbound += 1;
+      if (isBrandNew) pageDayObj.newInbound += 1;
+      else pageDayObj.returningInbound += 1;
       pageDayObj.leads.push(lead);
       if (isWon) {
         pageDayObj.won += 1;
@@ -265,9 +300,11 @@ export default function DailyPerformanceReport({
     const dailyStatsList = sortedDatesList.map(dateKey => {
       const item = dateMap.get(dateKey);
       const pagesArray = Array.from(item.pages.values());
-      const winRate = item.totalInbound > 0 ? Math.round((item.totalWon / item.totalInbound) * 100) : 0;
+      const effectiveInbound = inboundTypeFilter === 'new_only' ? item.newInbound : item.totalInbound;
+      const winRate = effectiveInbound > 0 ? Math.round((item.totalWon / effectiveInbound) * 100) : 0;
       return {
         ...item,
+        effectiveInbound,
         winRate,
         pages: pagesArray
       };
@@ -279,6 +316,8 @@ export default function DailyPerformanceReport({
       const row = {
         date: dateKey,
         totalInbound: item.totalInbound,
+        newInbound: item.newInbound,
+        returningInbound: item.returningInbound,
         totalWon: item.totalWon,
         totalRevenue: item.totalRevenue,
         pagesData: {}
@@ -288,6 +327,8 @@ export default function DailyPerformanceReport({
         const pData = item.pages.get(p.id);
         row.pagesData[p.id] = {
           inbound: pData ? pData.inbound : 0,
+          newInbound: pData ? pData.newInbound : 0,
+          returningInbound: pData ? pData.returningInbound : 0,
           won: pData ? pData.won : 0,
           revenue: pData ? pData.revenue : 0,
           leads: pData ? pData.leads : []
@@ -297,13 +338,16 @@ export default function DailyPerformanceReport({
       return row;
     });
 
-    const overallWinRate = grandInbound > 0 ? Math.round((grandWon / grandInbound) * 100) : 0;
-    const avgInboundPerDay = dailyStatsList.length > 0 ? (grandInbound / dailyStatsList.length).toFixed(1) : '0';
+    const activeInboundTotal = inboundTypeFilter === 'new_only' ? grandNewInbound : grandInbound;
+    const overallWinRate = activeInboundTotal > 0 ? Math.round((grandWon / activeInboundTotal) * 100) : 0;
+    const avgInboundPerDay = dailyStatsList.length > 0 ? (activeInboundTotal / dailyStatsList.length).toFixed(1) : '0';
 
     return {
       dailyStats: dailyStatsList,
       totals: {
         inbound: grandInbound,
+        newInbound: grandNewInbound,
+        returningInbound: grandReturningInbound,
         won: grandWon,
         pipeline: grandPipeline,
         revenue: grandRevenue,
@@ -314,7 +358,7 @@ export default function DailyPerformanceReport({
       crossPageMatrix: matrixRows,
       sortedDates: sortedDatesList
     };
-  }, [leads, selectedChannel, dateBoundary, facebookPages]);
+  }, [leads, selectedChannel, dateBoundary, facebookPages, inboundTypeFilter]);
 
   // Max inbound for bar chart scaling
   const maxInboundInChart = useMemo(() => {
@@ -417,6 +461,8 @@ export default function DailyPerformanceReport({
   // Filtered leads in the detail modal
   const modalDisplayLeads = useMemo(() => {
     if (!activeCustomerModal) return [];
+    if (modalFilter === 'new_only') return activeCustomerModal.leads.filter(l => isBrandNewLeadOnDate(l, activeCustomerModal.date));
+    if (modalFilter === 'returning') return activeCustomerModal.leads.filter(l => !isBrandNewLeadOnDate(l, activeCustomerModal.date));
     if (modalFilter === 'won') return activeCustomerModal.leads.filter(l => isWonStatus(l.status));
     if (modalFilter === 'pipeline') return activeCustomerModal.leads.filter(l => !isWonStatus(l.status));
     return activeCustomerModal.leads;
@@ -541,8 +587,55 @@ export default function DailyPerformanceReport({
           })}
         </div>
 
-        {/* Right: Page Selector & View Mode Switcher */}
+        {/* Right: Page Selector, Inbound Type Switcher & View Mode Switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Inbound Type Filter Switcher (All vs New Only) */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: '#f1f5f9',
+            padding: '3px',
+            borderRadius: '9px',
+            border: '1px solid #e2e8f0'
+          }}>
+            <button
+              type="button"
+              onClick={() => setInboundTypeFilter('all')}
+              style={{
+                padding: '5px 10px',
+                borderRadius: '7px',
+                fontSize: '0.78rem',
+                fontWeight: inboundTypeFilter === 'all' ? '700' : '500',
+                backgroundColor: inboundTypeFilter === 'all' ? '#ffffff' : 'transparent',
+                color: inboundTypeFilter === 'all' ? '#0f172a' : '#64748b',
+                boxShadow: inboundTypeFilter === 'all' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+              title="นับลูกค้าทุกคนที่มีการทัก/ส่งข้อความคุยกันในวันนั้น (ทั้งทักใหม่และลูกค้าเดิม)"
+            >
+              🌐 ลูกค้าทั้งหมด ({totals.inbound})
+            </button>
+            <button
+              type="button"
+              onClick={() => setInboundTypeFilter('new_only')}
+              style={{
+                padding: '5px 10px',
+                borderRadius: '7px',
+                fontSize: '0.78rem',
+                fontWeight: inboundTypeFilter === 'new_only' ? '700' : '500',
+                backgroundColor: inboundTypeFilter === 'new_only' ? '#ffffff' : 'transparent',
+                color: inboundTypeFilter === 'new_only' ? '#0284c7' : '#64748b',
+                boxShadow: inboundTypeFilter === 'new_only' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+              title="นับเฉพาะลูกค้าที่เพิ่งทักเข้ามาครั้งแรกจริง ๆ ในวันนั้น"
+            >
+              ✨ เฉพาะทักใหม่ ({totals.newInbound})
+            </button>
+          </div>
+
           {/* Facebook Page Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569' }}>เพจ:</span>
@@ -633,15 +726,17 @@ export default function DailyPerformanceReport({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#64748b' }}>
-              ลูกค้าทักเข้าทั้งหมด (Inbound)
+              {inboundTypeFilter === 'new_only' ? '✨ ลูกค้าใหม่เอี่ยม (New Inbound)' : 'ลูกค้าทักเข้าทั้งหมด (Total Inbound)'}
             </span>
             <Users size={16} color="#1877f2" />
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
-            {totals.inbound.toLocaleString()} <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#64748b' }}>คน</span>
+            {(inboundTypeFilter === 'new_only' ? totals.newInbound : totals.inbound).toLocaleString()} <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#64748b' }}>คน</span>
           </div>
-          <div style={{ fontSize: '0.78rem', color: '#3b82f6', marginTop: '6px', fontWeight: '600' }}>
-            เฉลี่ย {totals.avgInboundPerDay} คน/วัน ({totals.daysCount} วันที่แสดง)
+          <div style={{ fontSize: '0.78rem', color: '#3b82f6', marginTop: '6px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span>✨ ลูกค้าใหม่ {totals.newInbound} คน</span>
+            <span>•</span>
+            <span style={{ color: '#64748b' }}>🔄 ลูกค้าเดิมคุยต่อ {totals.returningInbound} คน</span>
           </div>
         </div>
 
@@ -982,7 +1077,7 @@ export default function DailyPerformanceReport({
                           </div>
                         </td>
 
-                        {/* 3. Total Inbound */}
+                        {/* 3. Total Inbound (New vs Returning) */}
                         <td style={{ padding: '14px 14px', textAlign: 'center' }}>
                           <span style={{
                             display: 'inline-block',
@@ -993,8 +1088,13 @@ export default function DailyPerformanceReport({
                             fontWeight: '800',
                             fontSize: '0.92rem'
                           }}>
-                            {day.totalInbound}
+                            {inboundTypeFilter === 'new_only' ? `✨ ${day.newInbound}` : day.totalInbound}
                           </span>
+                          {inboundTypeFilter === 'all' && (
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                              ใหม่ {day.newInbound} • คุยต่อ {day.returningInbound}
+                            </div>
+                          )}
                         </td>
 
                         {/* 4. Total Won */}
@@ -1301,6 +1401,8 @@ export default function DailyPerformanceReport({
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b' }}>แสดง:</span>
               {[
                 { id: 'all', label: `ทั้งหมด (${activeCustomerModal.leads.length})` },
+                { id: 'new_only', label: `✨ ลูกค้าใหม่ (${activeCustomerModal.leads.filter(l => isBrandNewLeadOnDate(l, activeCustomerModal.date)).length})` },
+                { id: 'returning', label: `🔄 ลูกค้าเดิมคุยต่อ (${activeCustomerModal.leads.filter(l => !isBrandNewLeadOnDate(l, activeCustomerModal.date)).length})` },
                 { id: 'won', label: `ปิดการขายแล้ว (${activeCustomerModal.leads.filter(l => isWonStatus(l.status)).length})` },
                 { id: 'pipeline', label: `กำลังคุย / อยู่ในไปป์ไลน์ (${activeCustomerModal.leads.filter(l => !isWonStatus(l.status)).length})` }
               ].map(f => (
@@ -1333,6 +1435,7 @@ export default function DailyPerformanceReport({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {modalDisplayLeads.map(lead => {
                     const isWon = isWonStatus(lead.status);
+                    const isBrandNew = isBrandNewLeadOnDate(lead, activeCustomerModal.date);
                     const pInfo = getPageInfo(lead.channel, lead.channelName);
 
                     return (
@@ -1357,6 +1460,17 @@ export default function DailyPerformanceReport({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#0f172a' }}>
                                 {lead.name}
+                              </span>
+                              <span style={{
+                                fontSize: '0.68rem',
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: isBrandNew ? '#eff6ff' : '#f8fafc',
+                                color: isBrandNew ? '#1d4ed8' : '#64748b',
+                                border: isBrandNew ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+                                fontWeight: '700'
+                              }}>
+                                {isBrandNew ? '✨ ทักใหม่' : '🔄 คุยต่อเนื่อง'}
                               </span>
                               <span style={{
                                 fontSize: '0.68rem',
