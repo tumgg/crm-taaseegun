@@ -34,6 +34,7 @@ export function mapDbToLead(row) {
     tag: row.tag || '',
     unreadCount: Number(row.unread_count ?? row.unreadCount ?? 0),
     customerPsid: row.customer_psid || row.customerPsid || null,
+    convId: row.conv_id || row.convId || (row.id && String(row.id).startsWith("fb-live-") ? String(row.id).replace("fb-live-", "") : null),
     commentId: row.comment_id || row.commentId || null,
     postId: row.post_id || row.postId || null,
     isLiveFacebookLead: Boolean(row.is_live_facebook_lead ?? row.isLiveFacebookLead),

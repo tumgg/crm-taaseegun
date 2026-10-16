@@ -1368,25 +1368,74 @@ export default function UnifiedChatCenter({
     };
   }, [activeLead]);
 
-  // Direct URLs to Meta Business Suite & Messenger Inbox
+  // Extract specific thread ID or item ID for Meta Business Suite deep link
+  const selectedItemId = useMemo(() => {
+    if (!activeLead) return null;
+
+    // 1. Post Comment: use commentId if available
+    if (activeLead.sourceType === "post_comment" && activeLead.commentId) {
+      return activeLead.commentId;
+    }
+
+    // 2. Messenger Chat: find thread ID (e.g. "t_23999228093057841")
+    const rawConv = activeLead.convId || (activeLead.id && String(activeLead.id).startsWith("fb-live-") ? String(activeLead.id).replace("fb-live-", "") : null);
+    if (rawConv) {
+      return rawConv.startsWith("t_") ? rawConv : "t_" + rawConv;
+    }
+
+    // 3. Fallback to Customer PSID
+    if (activeLead.customerPsid) {
+      return activeLead.customerPsid;
+    }
+
+    return null;
+  }, [activeLead]);
+
+  // Direct deep-link URLs to Meta Business Suite Inbox for this specific customer
   const metaBusinessSuiteUrl = useMemo(() => {
     if (!activeLead?.channel) return "https://business.facebook.com/latest/inbox/all";
     const pageId = activeLead.channel;
-    return `https://business.facebook.com/latest/inbox/messenger?asset_id=${pageId}&mailbox_id=${pageId}`;
-  }, [activeLead?.channel]);
 
-  const handleOpenMetaBusinessSuite = useCallback(() => {
+    if (activeLead.sourceType === "post_comment") {
+      if (activeLead.commentId) {
+        return "https://business.facebook.com/latest/inbox/fb_comments?asset_id=" + pageId + "&mailbox_id=" + pageId + "&selected_item_id=" + encodeURIComponent(activeLead.commentId);
+      }
+      return "https://business.facebook.com/latest/inbox/fb_comments?asset_id=" + pageId + "&mailbox_id=" + pageId;
+    }
+
+    if (selectedItemId) {
+      return "https://business.facebook.com/latest/inbox/messenger?asset_id=" + pageId + "&mailbox_id=" + pageId + "&selected_item_id=" + encodeURIComponent(selectedItemId);
+    }
+
+    return "https://business.facebook.com/latest/inbox/messenger?asset_id=" + pageId + "&mailbox_id=" + pageId;
+  }, [activeLead?.channel, activeLead?.sourceType, activeLead?.commentId, selectedItemId]);
+
+  // Direct Facebook Page Inbox link as reliable fallback
+  const facebookPageInboxUrl = useMemo(() => {
+    if (!activeLead?.channel) return null;
+    const pageId = activeLead.channel;
+    if (selectedItemId) {
+      return "https://www.facebook.com/" + pageId + "/inbox/?selected_item_id=" + encodeURIComponent(selectedItemId);
+    }
+    return "https://www.facebook.com/" + pageId + "/inbox/";
+  }, [activeLead?.channel, selectedItemId]);
+
+  const handleOpenMetaBusinessSuite = useCallback((customUrl) => {
+    const targetUrl = customUrl || metaBusinessSuiteUrl;
     if (replyText.trim()) {
       try {
         navigator.clipboard.writeText(replyText.trim());
-        setToastNotification("📋 คัดลอกข้อความที่คุณพิมพ์ไว้แล้ว! วางใน Meta Business Suite ได้เลย");
-        setTimeout(() => setToastNotification(null), 5000);
+        setToastNotification(`📋 คัดลอกข้อความของ "${activeLead?.name || "ลูกค้า"}" แล้ว! วาง (Ctrl+V) ใน Meta ได้เลย`);
+        setTimeout(() => setToastNotification(null), 6000);
       } catch (err) {
         console.warn("Clipboard error:", err);
       }
+    } else {
+      setToastNotification(`🔗 กำลังเปิดหน้าแชทของ "${activeLead?.name || "ลูกค้า"}" ใน Meta Business Suite...`);
+      setTimeout(() => setToastNotification(null), 4000);
     }
-    window.open(metaBusinessSuiteUrl, "_blank", "noopener,noreferrer");
-  }, [replyText, metaBusinessSuiteUrl]);
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  }, [replyText, metaBusinessSuiteUrl, activeLead?.name]);
 
   const handleApplyFollowUpTemplate = (templateText) => {
     setReplyText(templateText);
@@ -2927,13 +2976,13 @@ export default function UnifiedChatCenter({
                   {activeLead?.isLiveFacebookLead && (
                     <button
                       type="button"
-                      onClick={handleOpenMetaBusinessSuite}
-                      title="เปิดบทสนทนานี้ใน Meta Business Suite (พร้อมคัดลอกข้อความที่พิมพ์ไว้)"
+                      onClick={() => handleOpenMetaBusinessSuite()}
+                      title={`เปิดหน้าแชทของ "${activeLead?.name || "ลูกค้า"}" ใน Meta Business Suite`}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '5px',
-                        padding: '6px 11px',
+                        padding: '6px 12px',
                         borderRadius: '8px',
                         backgroundColor: messengerWindowStatus.isOutside24h ? '#fffbeb' : '#f0f7ff',
                         color: messengerWindowStatus.isOutside24h ? '#b45309' : '#1877f2',
@@ -2954,7 +3003,7 @@ export default function UnifiedChatCenter({
                       }}
                     >
                       <ExternalLink size={13} />
-                      <span>{messengerWindowStatus.isOutside24h ? 'เปิดตอบใน Meta' : 'Meta Suite'}</span>
+                      <span>{messengerWindowStatus.isOutside24h ? `เปิดแชท "${activeLead?.name || "ลูกค้า"}" ใน Meta` : "Meta Suite"}</span>
                     </button>
                   )}
                   {/* Toggle Customer Info Panel Button */}
@@ -4032,32 +4081,59 @@ export default function UnifiedChatCenter({
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                         <button
                           type="button"
-                          onClick={handleOpenMetaBusinessSuite}
-                          title="เปิดตอบใน Meta Business Suite (คัดลอกข้อความที่คุณพิมพ์ไว้ให้อัตโนมัติ)"
+                          onClick={() => handleOpenMetaBusinessSuite()}
+                          title={`เปิดแชทของ "${activeLead?.name || "ลูกค้า"}" ใน Meta Business Suite (พร้อมคัดลอกข้อความที่พิมพ์ไว้)`}
                           style={{
                             backgroundColor: '#1877f2',
                             color: '#ffffff',
                             border: 'none',
                             borderRadius: '8px',
-                            padding: '6px 12px',
-                            fontSize: '0.78rem',
+                            padding: '7px 13px',
+                            fontSize: '0.80rem',
                             fontWeight: '700',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '5px',
+                            gap: '6px',
                             boxShadow: '0 2px 6px rgba(24, 119, 242, 0.3)',
                             transition: 'all 0.15s ease'
                           }}
                           onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#166fe5'}
                           onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1877f2'}
                         >
-                          <span>เปิดตอบใน Meta</span>
+                          <span>เปิดแชท "${activeLead?.name || "ลูกค้า"}" ใน Meta</span>
                           <ExternalLink size={13} />
                         </button>
+
+                        {facebookPageInboxUrl && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMetaBusinessSuite(facebookPageInboxUrl)}
+                            title={`เปิดแชทของ "${activeLead?.name || "ลูกค้า"}" ผ่าน Facebook Page Inbox`}
+                            style={{
+                              backgroundColor: '#ffffff',
+                              color: '#1e293b',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '8px',
+                              padding: '6px 11px',
+                              fontSize: '0.74rem',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                          >
+                            <span>FB Inbox</span>
+                            <ExternalLink size={11} color="#64748b" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ) : (
