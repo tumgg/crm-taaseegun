@@ -285,7 +285,7 @@ export default function DailyPerformanceReport({
       };
 
       facebookPages.forEach(p => {
-        const pData = item.pages.find(pItem => pItem.channelId === p.id);
+        const pData = item.pages.get(p.id);
         row.pagesData[p.id] = {
           inbound: pData ? pData.inbound : 0,
           won: pData ? pData.won : 0,
