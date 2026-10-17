@@ -15,6 +15,7 @@ import {
   Smile,
   User,
   Phone,
+  MessageCircle,
   Mail,
   Tag,
   DollarSign,
@@ -883,16 +884,37 @@ export default function UnifiedChatCenter({
                   !incomingIds.has(old.id) &&
                   !merged.some(m => m.text === old.text && m.sender === old.sender && Math.abs((old.timestamp || 0) - (m.timestamp || 0)) < 180000) &&
                   (old.timestamp || 0) <= earliestMergedTimestamp &&
-                  !(typeof old.id === 'string' && old.id.startsWith('msg-'))
+                  !(typeof old.id === 'string' && (old.id.startsWith('msg-') || old.id.startsWith('placeholder-')))
                 );
 
                 // Keep recent optimistic messages not yet fetched by Graph API
                 const recentOptimistic = oldMessages.filter(old =>
-                  typeof old.id === 'string' && old.id.startsWith('msg-') &&
-                  !merged.some(m => m.text === old.text && m.sender === old.sender)
+                  typeof old.id === 'string' &&
+                  old.id.startsWith('msg-') &&
+                  !old.id.startsWith('msg-t_') &&
+                  !old.id.startsWith('placeholder-') &&
+                  old.sender === 'admin' &&
+                  (Date.now() - (old.timestamp || 0)) < 15 * 60 * 1000 &&
+                  !merged.some(m => m.text === old.text && m.sender === 'admin')
                 );
 
-                return [...olderMessagesInState, ...merged, ...recentOptimistic];
+                const combined = [...olderMessagesInState, ...merged, ...recentOptimistic];
+                const seen = new Set();
+                const deduplicated = combined.filter(m => {
+                  if (!m || !m.id) return false;
+                  if (seen.has(m.id)) return false;
+                  seen.add(m.id);
+                  if (combined.length > 1 && typeof m.id === 'string' && (m.id.startsWith('msg-t_') || m.id.startsWith('placeholder-'))) {
+                    return false;
+                  }
+                  return true;
+                });
+
+                return deduplicated.sort((a, b) => {
+                  const tA = a.timestamp || (a.created_time ? new Date(a.created_time).getTime() : 0);
+                  const tB = b.timestamp || (b.created_time ? new Date(b.created_time).getTime() : 0);
+                  return tA - tB;
+                });
               })(),
               olderMessagesUrl: incoming.olderMessagesUrl !== undefined ? incoming.olderMessagesUrl : oldLead.olderMessagesUrl,
               hasMoreOlderMessages: incoming.hasMoreOlderMessages !== undefined ? incoming.hasMoreOlderMessages : oldLead.hasMoreOlderMessages
@@ -1478,11 +1500,73 @@ export default function UnifiedChatCenter({
   // Helper to determine if a conversation has been replied to (our team/admin answered last)
   const isLeadReplied = (lead) => {
     if (!lead) return false;
+
     const msgs = lead.messages;
-    if (msgs && msgs.length > 0) {
-      const lastMsg = msgs[msgs.length - 1];
-      return lastMsg.sender === 'admin';
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      // Filter out synthetic fallback snippet placeholders if thread has real messages
+      const validMsgs = msgs.filter(m => {
+        if (!m) return false;
+        const mid = String(m.id || '');
+        if (msgs.length > 1 && (mid.startsWith('msg-t_') || mid.startsWith('placeholder-') || mid === `msg-${lead.convId}` || mid === `msg-${lead.id}`)) {
+          return false;
+        }
+        return true;
+      });
+
+      if (validMsgs.length > 0) {
+        // Sort chronologically by timestamp
+        const sorted = [...validMsgs].sort((a, b) => {
+          const tA = a.timestamp || (a.created_time ? new Date(a.created_time).getTime() : 0);
+          const tB = b.timestamp || (b.created_time ? new Date(b.created_time).getTime() : 0);
+          return tA - tB;
+        });
+
+        // Find latest admin message timestamp and latest customer message timestamp
+        let lastAdminTime = 0;
+        let lastCustomerTime = 0;
+
+        for (const m of sorted) {
+          const t = m.timestamp || (m.created_time ? new Date(m.created_time).getTime() : 0);
+          const isAdmin = m.sender === 'admin' || m.sender_type === 'admin' || m.sender_type === 'page' || m.is_echo;
+          if (isAdmin) {
+            if (t > lastAdminTime) lastAdminTime = t;
+          } else {
+            if (t > lastCustomerTime) lastCustomerTime = t;
+          }
+        }
+
+        // If admin message exists and is at or after the customer message => answered
+        if (lastAdminTime > 0 && lastAdminTime >= lastCustomerTime) {
+          return true;
+        }
+
+        // If customer sent a newer message after the admin's reply => waiting for reply
+        if (lastCustomerTime > lastAdminTime) {
+          return false;
+        }
+
+        const lastMsg = sorted[sorted.length - 1];
+        if (lastMsg) {
+          return lastMsg.sender === 'admin' || lastMsg.sender_type === 'admin' || lastMsg.sender_type === 'page';
+        }
+      }
     }
+
+    // Check if status was explicitly progressed beyond 'ทักใหม่'
+    const status = (lead.status || '').trim();
+    if (
+      status.includes('ติดต่อ') ||
+      status.includes('ตอบแล้ว') ||
+      status.includes('เสนอราคา') ||
+      status.includes('นัด') ||
+      status.includes('มัดจำ') ||
+      status.includes('ปิดการขาย') ||
+      status.includes('สำเร็จ') ||
+      status.includes('ส่งงาน')
+    ) {
+      return true;
+    }
+
     // If no message thread yet, inquiry was initiated by customer => unreplied
     return false;
   };
@@ -1508,7 +1592,7 @@ export default function UnifiedChatCenter({
         const matchesInquiry = (lead.inquiry || '').toLowerCase().includes(q);
         const matchesSourceTitle = (lead.sourceTitle || '').toLowerCase().includes(q);
         const matchesNotes = (lead.notes || '').toLowerCase().includes(q);
-        const matchesContact = (lead.contact || '').toLowerCase().includes(q) || (lead.phone || '').toLowerCase().includes(q);
+        const matchesContact = (lead.contact || '').toLowerCase().includes(q) || (lead.phone || '').toLowerCase().includes(q) || (lead.lineId || '').toLowerCase().includes(q);
         const matchesStatus = (lead.status || '').toLowerCase().includes(q);
         const matchesChannelName = (lead.channelName || '').toLowerCase().includes(q);
         const matchesCustomerRole = (lead.customerRole || '').toLowerCase().includes(q);
@@ -1939,6 +2023,42 @@ export default function UnifiedChatCenter({
   const handleUpdateLeadField = (field, value) => {
     if (!activeLead) return;
     setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, [field]: value } : l));
+  };
+
+  // Toggle / manual mark as replied or unreplied
+  const handleToggleMarkReplied = (targetLead, markAsReplied) => {
+    if (!targetLead) return;
+    const now = Date.now();
+    const newStatus = markAsReplied
+      ? (targetLead.status && (targetLead.status.includes('ทักใหม่') || targetLead.status.includes('New')) ? 'ติดต่อกลับแล้ว (Contacted)' : targetLead.status)
+      : 'ทักใหม่ (New)';
+
+    setLeads(prev => prev.map(l => {
+      if (l.id === targetLead.id) {
+        const cleanedMsgs = (l.messages || []).filter(m => {
+          if (!m) return false;
+          const mid = String(m.id || '');
+          if (l.messages.length > 1 && (mid.startsWith('msg-t_') || mid.startsWith('placeholder-'))) {
+            return false;
+          }
+          return true;
+        });
+
+        return {
+          ...l,
+          status: newStatus,
+          unreadCount: markAsReplied ? 0 : 1,
+          messages: cleanedMsgs,
+          lastActivity: now
+        };
+      }
+      return l;
+    }));
+
+    setToastNotification(markAsReplied
+      ? `✅ ทำเครื่องหมายว่าตอบลูกค้า "${targetLead.name}" เรียบร้อยแล้ว`
+      : `⚠️ เปลี่ยนสถานะของ "${targetLead.name}" เป็นรอตอบ`);
+    setTimeout(() => setToastNotification(null), 3000);
   };
 
   // Client-side customer avatar photo upload with lightweight compression
@@ -2695,9 +2815,23 @@ export default function UnifiedChatCenter({
                 const closingInfo = analyzeClosingScore(lead);
                 const followUpInfo = detectFollowUpStatus(lead);
                 const isFollowUpNeeded = isRecent && (hasDueFollowUp || followUpInfo.needsFollowUp);
-                const lastMsgObj = lead.messages && lead.messages.length > 0
-                  ? lead.messages[lead.messages.length - 1]
-                  : null;
+                const validThreadMsgs = Array.isArray(lead.messages)
+                  ? lead.messages.filter(m => {
+                      if (!m) return false;
+                      const mid = String(m.id || '');
+                      if (lead.messages.length > 1 && (mid.startsWith('msg-t_') || mid.startsWith('placeholder-') || mid === `msg-${lead.convId}` || mid === `msg-${lead.id}`)) {
+                        return false;
+                      }
+                      return true;
+                    }).sort((a, b) => {
+                      const tA = a.timestamp || (a.created_time ? new Date(a.created_time).getTime() : 0);
+                      const tB = b.timestamp || (b.created_time ? new Date(b.created_time).getTime() : 0);
+                      return tA - tB;
+                    })
+                  : [];
+                const lastMsgObj = validThreadMsgs.length > 0
+                  ? validThreadMsgs[validThreadMsgs.length - 1]
+                  : (lead.messages && lead.messages.length > 0 ? lead.messages[lead.messages.length - 1] : null);
                 let lastMsg = lastMsgObj ? lastMsgObj.text : lead.inquiry;
                 if (lastMsgObj && lastMsgObj.attachments?.length > 0 && (!lastMsg || lastMsg.startsWith('(') || lastMsg.includes('ไฟล์แนบ') || lastMsg.includes('รูปภาพ'))) {
                   const firstAtt = lastMsgObj.attachments[0];
@@ -2888,21 +3022,29 @@ export default function UnifiedChatCenter({
                           );
                         })()}
 
-                        {/* PROMINENT REPLY STATUS BADGE */}
+                        {/* PROMINENT REPLY STATUS BADGE (Clickable Quick Toggle) */}
                         {!isReplied ? (
-                          <span style={{
-                            fontSize: '0.65rem',
-                            padding: '1px 7px',
-                            borderRadius: '999px',
-                            backgroundColor: '#fef2f2',
-                            color: '#dc2626',
-                            fontWeight: '800',
-                            border: '1px solid #fecaca',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            boxShadow: '0 1px 2px rgba(220, 38, 38, 0.06)'
-                          }}>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleMarkReplied(lead, true);
+                            }}
+                            title="คลิกเพื่อทำเครื่องหมายว่าตอบแล้วทันที"
+                            style={{
+                              fontSize: '0.65rem',
+                              padding: '1px 7px',
+                              borderRadius: '999px',
+                              backgroundColor: '#fef2f2',
+                              color: '#dc2626',
+                              fontWeight: '800',
+                              border: '1px solid #fecaca',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              boxShadow: '0 1px 2px rgba(220, 38, 38, 0.06)',
+                              cursor: 'pointer'
+                            }}
+                          >
                             <span style={{
                               width: '5px',
                               height: '5px',
@@ -2912,18 +3054,26 @@ export default function UnifiedChatCenter({
                             รอตอบ
                           </span>
                         ) : (
-                          <span style={{
-                            fontSize: '0.65rem',
-                            padding: '1px 7px',
-                            borderRadius: '999px',
-                            backgroundColor: '#f0fdf4',
-                            color: '#16a34a',
-                            fontWeight: '700',
-                            border: '1px solid #bbf7d0',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '3px'
-                          }}>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleMarkReplied(lead, false);
+                            }}
+                            title="ตอบแล้ว (คลิกหากต้องการเปลี่ยนกลับเป็นรอตอบ)"
+                            style={{
+                              fontSize: '0.65rem',
+                              padding: '1px 7px',
+                              borderRadius: '999px',
+                              backgroundColor: '#f0fdf4',
+                              color: '#16a34a',
+                              fontWeight: '700',
+                              border: '1px solid #bbf7d0',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              cursor: 'pointer'
+                            }}
+                          >
                             <Check size={11} strokeWidth={3} /> ตอบแล้ว
                           </span>
                         )}
@@ -3176,6 +3326,34 @@ export default function UnifiedChatCenter({
                         </a>
                       )}
 
+                      {/* LINE Quick Link */}
+                      {activeLead.lineId && (
+                        <a
+                          href={activeLead.lineId.startsWith('http')
+                            ? activeLead.lineId
+                            : `https://line.me/ti/p/~${encodeURIComponent(activeLead.lineId.replace(/^@/, ''))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            backgroundColor: '#e8fbf0',
+                            color: '#047857',
+                            fontWeight: '800',
+                            border: '1px solid #b7f4cb',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            textDecoration: 'none',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="กดเพื่อเปิด LINE หรือเพิ่มเพื่อน"
+                        >
+                          <MessageCircle size={10} color="#06c755" /> LINE: {activeLead.lineId}
+                        </a>
+                      )}
+
                       {/* AI Intent Badge */}
                       {currentIntent && (
                         <span style={{
@@ -3293,6 +3471,44 @@ export default function UnifiedChatCenter({
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
+
+                  {/* Mark as Replied Quick Toggle Button */}
+                  {(() => {
+                    const replied = isLeadReplied(activeLead);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMarkReplied(activeLead, !replied)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 9px',
+                          borderRadius: '6px',
+                          backgroundColor: replied ? '#f0fdf4' : '#fef2f2',
+                          color: replied ? '#16a34a' : '#dc2626',
+                          border: `1px solid ${replied ? '#bbf7d0' : '#fecaca'}`,
+                          fontSize: '0.74rem',
+                          fontWeight: '800',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title={replied ? 'ตอบแล้ว (คลิกหากต้องการเปลี่ยนกลับเป็น "รอตอบ")' : 'คลิกเพื่อทำเครื่องหมายว่า "ตอบแล้ว" ทันที'}
+                      >
+                        {replied ? (
+                          <>
+                            <Check size={13} strokeWidth={3} /> ตอบแล้ว
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+                            คลิกเพื่อติ๊กตอบแล้ว
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
 
                   {isMobile && (
                     <button
@@ -5386,6 +5602,108 @@ export default function UnifiedChatCenter({
                       <Phone
                         size={13}
                         color="#94a3b8"
+                        style={{
+                          position: 'absolute',
+                          left: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          pointerEvents: 'none'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. ช่องใส่ LINE ID ลูกค้า */}
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.76rem',
+                      fontWeight: '800',
+                      color: '#334155',
+                      marginBottom: '5px'
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <MessageCircle size={13} color="#06c755" /> LINE ID ลูกค้า
+                      </span>
+                      {activeLead.lineId && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(activeLead.lineId);
+                              setToastNotification(`📋 คัดลอก LINE ID "${activeLead.lineId}" เรียบร้อยแล้ว`);
+                              setTimeout(() => setToastNotification(null), 2000);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              fontSize: '0.7rem',
+                              color: '#059669',
+                              cursor: 'pointer',
+                              fontWeight: '700',
+                              textDecoration: 'underline'
+                            }}
+                            title="คัดลอก LINE ID"
+                          >
+                            คัดลอก
+                          </button>
+                          <a
+                            href={activeLead.lineId.startsWith('http')
+                              ? activeLead.lineId
+                              : `https://line.me/ti/p/~${encodeURIComponent(activeLead.lineId.replace(/^@/, ''))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              fontSize: '0.68rem',
+                              color: '#06c755',
+                              fontWeight: '800',
+                              textDecoration: 'none',
+                              backgroundColor: '#e8fbf0',
+                              border: '1px solid #b7f4cb',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}
+                            title="เปิดแอป LINE เพื่อเพิ่มเพื่อน"
+                          >
+                            เปิด LINE ↗
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="กรอก LINE ID เช่น @goodvibes หรือ somchai99"
+                        value={activeLead.lineId || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          handleUpdateLeadField('lineId', val);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px 8px 30px',
+                          fontSize: '0.82rem',
+                          fontWeight: '600',
+                          color: '#0f172a',
+                          backgroundColor: '#ffffff',
+                          border: '1.5px solid #cbd5e1',
+                          borderRadius: '8px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.15s ease'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#06c755'}
+                        onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                      />
+                      <MessageCircle
+                        size={13}
+                        color="#06c755"
                         style={{
                           position: 'absolute',
                           left: '10px',

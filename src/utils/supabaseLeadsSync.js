@@ -41,6 +41,7 @@ export function mapDbToLead(row) {
     messages: Array.isArray(row.messages) ? row.messages : [],
     customerRole: row.customer_role || row.customerRole || '',
     phone: row.phone || '',
+    lineId: row.line_id || row.lineId || '',
     wonDate: row.won_date || row.wonDate || null
   };
 }
@@ -80,6 +81,7 @@ export function mapLeadToDb(lead) {
     messages: Array.isArray(lead.messages) ? lead.messages : [],
     customer_role: lead.customerRole || '',
     phone: lead.phone || '',
+    line_id: lead.lineId || lead.line || '',
     won_date: lead.wonDate || null,
     updated_at: new Date().toISOString()
   };

@@ -312,15 +312,36 @@ export default function App() {
                     !incomingIds.has(old.id) &&
                     !merged.some(m => m.text === old.text && m.sender === old.sender && Math.abs((old.timestamp || 0) - (m.timestamp || 0)) < 180000) &&
                     (old.timestamp || 0) <= earliestMergedTimestamp &&
-                    !(typeof old.id === 'string' && old.id.startsWith('msg-'))
+                    !(typeof old.id === 'string' && (old.id.startsWith('msg-') || old.id.startsWith('placeholder-')))
                   );
 
                   const recentOptimistic = oldMessages.filter(old =>
-                    typeof old.id === 'string' && old.id.startsWith('msg-') &&
-                    !merged.some(m => m.text === old.text && m.sender === old.sender)
+                    typeof old.id === 'string' &&
+                    old.id.startsWith('msg-') &&
+                    !old.id.startsWith('msg-t_') &&
+                    !old.id.startsWith('placeholder-') &&
+                    old.sender === 'admin' &&
+                    (Date.now() - (old.timestamp || 0)) < 15 * 60 * 1000 &&
+                    !merged.some(m => m.text === old.text && m.sender === 'admin')
                   );
 
-                  return [...olderMessagesInState, ...merged, ...recentOptimistic];
+                  const combined = [...olderMessagesInState, ...merged, ...recentOptimistic];
+                  const seen = new Set();
+                  const deduplicated = combined.filter(m => {
+                    if (!m || !m.id) return false;
+                    if (seen.has(m.id)) return false;
+                    seen.add(m.id);
+                    if (combined.length > 1 && typeof m.id === 'string' && (m.id.startsWith('msg-t_') || m.id.startsWith('placeholder-'))) {
+                      return false;
+                    }
+                    return true;
+                  });
+
+                  return deduplicated.sort((a, b) => {
+                    const tA = a.timestamp || (a.created_time ? new Date(a.created_time).getTime() : 0);
+                    const tB = b.timestamp || (b.created_time ? new Date(b.created_time).getTime() : 0);
+                    return tA - tB;
+                  });
                 })(),
                 olderMessagesUrl: incoming.olderMessagesUrl !== undefined ? incoming.olderMessagesUrl : oldLead.olderMessagesUrl,
                 hasMoreOlderMessages: incoming.hasMoreOlderMessages !== undefined ? incoming.hasMoreOlderMessages : oldLead.hasMoreOlderMessages,

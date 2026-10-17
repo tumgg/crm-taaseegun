@@ -4,34 +4,31 @@
 export function getLeadTimestamp(lead) {
   if (!lead) return 0;
 
+  let maxT = 0;
+
   // 1. Direct timestamp if valid number
   if (typeof lead.timestamp === 'number' && !isNaN(lead.timestamp) && lead.timestamp > 0) {
-    if (Array.isArray(lead.messages) && lead.messages.length > 0) {
-      const lastMsg = lead.messages[lead.messages.length - 1];
-      if (lastMsg?.timestamp && lastMsg.timestamp > lead.timestamp) {
-        return lastMsg.timestamp;
-      }
-    }
-    return lead.timestamp;
+    maxT = lead.timestamp;
   }
 
   // 2. updatedTime ISO string from Facebook Meta Graph API
   if (lead.updatedTime) {
     const t = new Date(lead.updatedTime).getTime();
-    if (!isNaN(t) && t > 0) return t;
+    if (!isNaN(t) && t > maxT) maxT = t;
   }
 
-  // 3. Check last message created_time or timestamp
+  // 3. Scan messages for latest timestamp across thread
   if (Array.isArray(lead.messages) && lead.messages.length > 0) {
-    const lastMsg = lead.messages[lead.messages.length - 1];
-    if (lastMsg) {
-      if (lastMsg.timestamp && !isNaN(lastMsg.timestamp)) return lastMsg.timestamp;
-      if (lastMsg.created_time) {
-        const t = new Date(lastMsg.created_time).getTime();
-        if (!isNaN(t) && t > 0) return t;
+    for (const msg of lead.messages) {
+      if (!msg) continue;
+      const t = msg.timestamp || (msg.created_time ? new Date(msg.created_time).getTime() : 0);
+      if (t && !isNaN(t) && t > maxT) {
+        maxT = t;
       }
     }
   }
+
+  if (maxT > 0) return maxT;
 
   // 4. Parse lead.date (e.g. "2026-10-05 14:11" or ISO string)
   if (lead.date) {
@@ -149,7 +146,7 @@ export function parseFacebookMessagesArray(dataArray, pageId, pageName, customer
   });
 
   const parsed = sorted.map(m => {
-    const isFromPage = m.from?.id === pageId;
+    const isFromPage = String(m.from?.id) === String(pageId) || m.is_echo === true || Boolean(pageName && m.from?.name && m.from.name.includes(pageName));
     const msgDate = m.created_time ? new Date(m.created_time) : new Date();
     const timeStr = `${String(msgDate.getHours()).padStart(2, '0')}:${String(msgDate.getMinutes()).padStart(2, '0')}`;
 
@@ -399,8 +396,8 @@ export async function fetchLiveFacebookConversations(pageId, pageToken, pageName
         if (messageList.length === 0 && conv.snippet) {
           messageList = [
             {
-              id: `msg-${conv.id}`,
-              sender: 'lead',
+              id: `placeholder-${conv.id}`,
+              sender: (conv.unread_count === 0 && !conv.snippet.startsWith('ลูกค้า')) ? 'admin' : 'lead',
               text: conv.snippet,
               attachments: [],
               time: 'ล่าสุด',

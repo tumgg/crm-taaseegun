@@ -95,7 +95,7 @@ export function parseRawMessages(rawArray, pageId, pageName, customerName, convI
   });
 
   return sorted.map(m => {
-    const isFromPage = m.from?.id === pageId || m.is_echo === true;
+    const isFromPage = String(m.from?.id) === String(pageId) || m.is_echo === true || Boolean(pageName && m.from?.name && m.from.name.includes(pageName));
     const rawAtts = m.attachments?.data || [];
     const parsedAttachments = rawAtts.map(att => normalizeAttachment(att)).filter(Boolean);
 
@@ -179,10 +179,10 @@ export async function fetchConversationsFromGraph(pageId, options = {}) {
       // If no messages fetched, create fallback preview from snippet
       if (messageList.length === 0 && conv.snippet) {
         messageList = [{
-          message_id: `msg-${conv.id}`,
+          message_id: `placeholder-${conv.id}`,
           conversation_id: conv.id,
-          sender_type: 'customer',
-          sender_name: customerName,
+          sender_type: (conv.unread_count === 0 && !conv.snippet.startsWith('ลูกค้า')) ? 'page' : 'customer',
+          sender_name: (conv.unread_count === 0 && !conv.snippet.startsWith('ลูกค้า')) ? pageName : customerName,
           message: conv.snippet,
           created_at: toBangkokIso(conv.updated_time),
           timestamp: conv.updated_time ? new Date(conv.updated_time).getTime() : Date.now(),
