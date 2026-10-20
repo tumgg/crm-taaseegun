@@ -415,6 +415,84 @@ export function highlightSearchTerm(text, query, isAdmin = false) {
   return parts;
 }
 
+// Helper to render message text with clickable hyperlinks and search highlight
+export function renderMessageTextWithLinks(text, query, isAdmin = false) {
+  if (!text || typeof text !== 'string') return text;
+
+  // Regex matching URLs starting with http://, https://, www., or known domains/TLDs
+  const urlRegex = /(https?:\/\/[^\s<]+|www\.[^\s<]+|(?:[a-zA-Z0-9-]+\.)+(?:com|co\.th|in\.th|org|net|me|io|app|dev|ly|gl|be|watch|page)(?:\/[^\s<]*)?)/gi;
+
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    let rawUrl = match[0];
+
+    // Push preceding text with search highlight
+    if (matchIndex > lastIndex) {
+      parts.push(highlightSearchTerm(text.slice(lastIndex, matchIndex), query, isAdmin));
+    }
+
+    // Strip trailing punctuation if accidentally captured
+    let trailingPunct = '';
+    const punctMatch = rawUrl.match(/[.,;:!?)\]"'»”’]+$/);
+    if (punctMatch) {
+      trailingPunct = punctMatch[0];
+      rawUrl = rawUrl.slice(0, -trailingPunct.length);
+    }
+
+    const href = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+
+    parts.push(
+      <a
+        key={`chat-link-${matchIndex}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+        title={`คลิกเพื่อเปิดลิงก์: ${href}`}
+        className={isAdmin ? 'chat-msg-link-admin' : 'chat-msg-link'}
+        style={{
+          color: isAdmin ? '#93c5fd' : '#2563eb',
+          textDecoration: 'underline',
+          textUnderlineOffset: '3px',
+          wordBreak: 'break-all',
+          fontWeight: '500',
+          cursor: 'pointer',
+          display: 'inline'
+        }}
+      >
+        {highlightSearchTerm(rawUrl, query, isAdmin)}
+        <ExternalLink
+          size={12}
+          style={{
+            display: 'inline',
+            verticalAlign: '-1px',
+            marginLeft: '3px',
+            opacity: 0.85
+          }}
+        />
+      </a>
+    );
+
+    if (trailingPunct) {
+      parts.push(highlightSearchTerm(trailingPunct, query, isAdmin));
+    }
+
+    lastIndex = matchIndex + match[0].length;
+  }
+
+  // Push remaining trailing text
+  if (lastIndex < text.length) {
+    parts.push(highlightSearchTerm(text.slice(lastIndex), query, isAdmin));
+  }
+
+  return parts.length > 0 ? parts : highlightSearchTerm(text, query, isAdmin);
+}
+
 export default function UnifiedChatCenter({
   leads,
   setLeads,
@@ -4243,8 +4321,8 @@ export default function UnifiedChatCenter({
                           msg.attachments.length === 0 ||
                           (!msg.text.startsWith('(') && msg.text !== '🖼️ รูปภาพ' && msg.text !== '🏷️ สติกเกอร์' && msg.text !== '📎 ไฟล์แนบ' && msg.text !== '🎥 วิดีโอ')
                         ) && (
-                            <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                              {highlightSearchTerm(msg.text, searchQuery, isAdmin)}
+                            <div style={{ fontSize: '0.86rem', lineHeight: '1.45', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                              {renderMessageTextWithLinks(msg.text, searchQuery, isAdmin)}
                             </div>
                           )}
 

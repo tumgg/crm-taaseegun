@@ -446,3 +446,34 @@ a {
   animation: spin 1s linear infinite;
 }
 
+/* Clickable links in chat bubbles */
+.chat-msg-link {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.chat-msg-link:hover {
+  color: #1d4ed8 !important;
+  opacity: 0.9;
+}
+
+.chat-msg-link-admin {
+  color: #93c5fd;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.chat-msg-link-admin:hover {
+  color: #ffffff !important;
+  opacity: 0.95;
+}
+
