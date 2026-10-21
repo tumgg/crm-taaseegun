@@ -807,3 +807,94 @@ export async function sendFacebookPrivateReply(pageToken, commentId, messageText
     throw err;
   }
 }
+
+/**
+ * Send / remove a reaction on a Facebook Messenger message
+ */
+export async function sendFacebookMessageReaction(pageId, recipientPsid, messageMid, reaction = '❤️', isRemoving = false, pageToken = null) {
+  try {
+    // 1. Try secure backend proxy first
+    if (pageId) {
+      try {
+        const res = await fetch('/api/facebook', {
+          method: 'POST',
+          headers: getCrmAuthHeaders(),
+          body: JSON.stringify({
+            action: isRemoving ? 'unreact_message' : 'react_message',
+            pageId,
+            recipientPsid,
+            messageMid,
+            reaction
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) return data.result;
+        if (data.error) throw new Error(data.error);
+      } catch (backendErr) {
+        console.warn('Backend react message proxy failed:', backendErr);
+        if (backendErr.message && !backendErr.message.includes('fetch')) throw backendErr;
+      }
+    }
+
+    // 2. Direct Graph API fallback if pageToken present
+    if (pageToken) {
+      const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(pageToken)}`;
+      const postBody = {
+        recipient: { id: recipientPsid },
+        sender_action: isRemoving ? 'unreact' : 'react',
+        payload: isRemoving ? { message_id: messageMid } : { message_id: messageMid, reaction }
+      };
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postBody)
+      });
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn('Error sending Facebook message reaction:', err);
+    throw err;
+  }
+}
+
+/**
+ * React or like a Facebook post comment
+ */
+export async function sendFacebookCommentReaction(pageId, commentId, reaction = 'LIKE', isRemoving = false, pageToken = null) {
+  try {
+    if (pageId) {
+      try {
+        const res = await fetch('/api/facebook', {
+          method: 'POST',
+          headers: getCrmAuthHeaders(),
+          body: JSON.stringify({
+            action: 'react_comment',
+            pageId,
+            commentId,
+            reaction,
+            isRemoving
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) return data.result;
+        if (data.error) throw new Error(data.error);
+      } catch (backendErr) {
+        console.warn('Backend comment react proxy failed:', backendErr);
+        if (backendErr.message && !backendErr.message.includes('fetch')) throw backendErr;
+      }
+    }
+
+    if (pageToken) {
+      const method = isRemoving ? 'DELETE' : 'POST';
+      let url = `https://graph.facebook.com/v19.0/${commentId}/likes?access_token=${encodeURIComponent(pageToken)}`;
+      const res = await fetch(url, { method });
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn('Error sending Facebook comment reaction:', err);
+    throw err;
+  }
+}

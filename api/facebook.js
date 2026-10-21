@@ -12,7 +12,9 @@ import {
   sendFacebookAttachment,
   replyFacebookComment,
   replyFacebookCommentAttachment,
-  sendFacebookPrivateReply
+  sendFacebookPrivateReply,
+  reactFacebookMessage,
+  reactFacebookComment
 } from './lib/facebookService.js';
 
 import {
@@ -212,6 +214,42 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing pageId, commentId, or messageText' });
       }
       const result = await sendFacebookPrivateReply(pageId, commentId, messageText);
+      return res.status(200).json({ success: true, result });
+    }
+
+    // -------------------------------------------------------------
+    // ACTION: react_message
+    // -------------------------------------------------------------
+    if (action === 'react_message') {
+      const { recipientPsid, messageMid, reaction } = req.body;
+      if (!pageId || !recipientPsid || !messageMid) {
+        return res.status(400).json({ error: 'Missing pageId, recipientPsid, or messageMid' });
+      }
+      const result = await reactFacebookMessage(pageId, recipientPsid, messageMid, reaction || '❤️', false);
+      return res.status(200).json({ success: true, result });
+    }
+
+    // -------------------------------------------------------------
+    // ACTION: unreact_message
+    // -------------------------------------------------------------
+    if (action === 'unreact_message') {
+      const { recipientPsid, messageMid } = req.body;
+      if (!pageId || !recipientPsid || !messageMid) {
+        return res.status(400).json({ error: 'Missing pageId, recipientPsid, or messageMid' });
+      }
+      const result = await reactFacebookMessage(pageId, recipientPsid, messageMid, null, true);
+      return res.status(200).json({ success: true, result });
+    }
+
+    // -------------------------------------------------------------
+    // ACTION: react_comment
+    // -------------------------------------------------------------
+    if (action === 'react_comment') {
+      const { commentId, reaction, isRemoving } = req.body;
+      if (!pageId || !commentId) {
+        return res.status(400).json({ error: 'Missing pageId or commentId' });
+      }
+      const result = await reactFacebookComment(pageId, commentId, reaction || 'LIKE', !!isRemoving);
       return res.status(200).json({ success: true, result });
     }
 

@@ -81,7 +81,9 @@ import {
   formatConversationTime,
   getLeadTimestamp,
   saveReplyQuoteCache,
-  getReplyQuoteCache
+  getReplyQuoteCache,
+  sendFacebookMessageReaction,
+  sendFacebookCommentReaction
 } from '../utils/facebookLiveSync';
 import { supabase } from '../utils/supabaseClient';
 import PortfolioCatalogModal from './PortfolioCatalogModal';
@@ -570,6 +572,7 @@ export default function UnifiedChatCenter({
   // Message Reply & Quoting State
   const [replyingToMessage, setReplyingToMessage] = useState(null); // { id, mid, sender, name, text, attachments, time }
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [activeReactionPickerMid, setActiveReactionPickerMid] = useState(null);
 
   // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
@@ -1870,6 +1873,116 @@ export default function UnifiedChatCenter({
 
   const handleCancelReply = () => {
     setReplyingToMessage(null);
+  };
+
+  // Helper to extract admin reaction from a message
+  const getAdminReaction = (msg) => {
+    if (!msg) return null;
+    const list = Array.isArray(msg.reactions)
+      ? msg.reactions
+      : (msg.reaction ? (typeof msg.reaction === 'string' ? [{ emoji: msg.reaction, by: 'admin' }] : [msg.reaction]) : []);
+    return list.find(r => r.by === 'admin') || null;
+  };
+
+  // Helper to aggregate reaction groups for display (e.g. { emoji: '❤️', count: 1, byAdmin: true, users: [...] })
+  const getReactionGroups = (msg) => {
+    if (!msg) return [];
+    const list = Array.isArray(msg.reactions)
+      ? msg.reactions
+      : (msg.reaction ? (typeof msg.reaction === 'string' ? [{ emoji: msg.reaction, by: 'admin' }] : [msg.reaction]) : []);
+
+    const map = new Map();
+    list.forEach(r => {
+      const em = r.emoji;
+      if (!em) return;
+      if (!map.has(em)) {
+        map.set(em, { emoji: em, count: 0, byAdmin: false, users: [] });
+      }
+      const item = map.get(em);
+      item.count += 1;
+      if (r.by === 'admin') item.byAdmin = true;
+      if (r.userName) item.users.push(r.userName);
+    });
+    return Array.from(map.values());
+  };
+
+  // Toggle reaction (Heart ❤️, Like 👍, or any emoji) on customer/admin messages
+  const handleToggleReaction = async (msg, emoji = '❤️') => {
+    if (!activeLead || !msg) return;
+    setActiveReactionPickerMid(null);
+
+    const currentReactions = Array.isArray(msg.reactions)
+      ? [...msg.reactions]
+      : (msg.reaction ? (typeof msg.reaction === 'string' ? [{ emoji: msg.reaction, by: 'admin' }] : [msg.reaction]) : []);
+
+    const adminIdx = currentReactions.findIndex(r => r.by === 'admin');
+    let newReactions = [];
+    let isRemoving = false;
+
+    if (adminIdx !== -1) {
+      if (currentReactions[adminIdx].emoji === emoji) {
+        // Toggle off if already selected
+        newReactions = currentReactions.filter((_, i) => i !== adminIdx);
+        isRemoving = true;
+      } else {
+        // Switch to new reaction
+        newReactions = currentReactions.map((r, i) => i === adminIdx ? { ...r, emoji, timestamp: Date.now() } : r);
+      }
+    } else {
+      // Add new reaction
+      newReactions = [
+        ...currentReactions,
+        {
+          emoji,
+          by: 'admin',
+          userName: currentUser?.name || 'แอดมินเพจ',
+          timestamp: Date.now()
+        }
+      ];
+    }
+
+    // 1. Optimistic UI update in leads state
+    const updatedMessages = (activeLead.messages || []).map(m => {
+      if (m.id === msg.id || (m.timestamp === msg.timestamp && m.text === msg.text)) {
+        return {
+          ...m,
+          reactions: newReactions,
+          reaction: newReactions.length > 0 ? newReactions[0].emoji : null
+        };
+      }
+      return m;
+    });
+
+    const updatedLead = {
+      ...activeLead,
+      messages: updatedMessages
+    };
+
+    setLeads(prev => prev.map(l => l.id === activeLead.id ? updatedLead : l));
+
+    // 2. Asynchronously sync to Facebook Graph API in background
+    try {
+      const pageId = activeLead.channel;
+      const recipientPsid = activeLead.customerPsid || (activeLead.id?.startsWith('fb-live-') ? activeLead.id.replace('fb-live-', '') : null);
+      const pageToken = activeLead.activePageToken || null;
+
+      if (pageId) {
+        if (msg.isComment || activeLead.sourceType === 'post_comment') {
+          const commentId = msg.commentId || msg.id;
+          if (commentId && !commentId.startsWith('msg-') && !commentId.startsWith('placeholder-')) {
+            sendFacebookCommentReaction(pageId, commentId, emoji, isRemoving, pageToken).catch(err => {
+              console.warn('Comment reaction background sync notice:', err);
+            });
+          }
+        } else if (recipientPsid && msg.id && !msg.id.startsWith('msg-') && !msg.id.startsWith('placeholder-')) {
+          sendFacebookMessageReaction(pageId, recipientPsid, msg.id, emoji, isRemoving, pageToken).catch(err => {
+            console.warn('Messenger reaction background sync notice:', err);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Facebook reaction API error (ignored):', err);
+    }
   };
 
   const handleScrollToMessage = (targetMsgId) => {
@@ -3893,6 +4006,7 @@ export default function UnifiedChatCenter({
                 <div
                   ref={chatMessagesContainerRef}
                   onScroll={handleChatScroll}
+                  onClick={() => setActiveReactionPickerMid(null)}
                   className="scrollable-pane"
                   style={{
                     flex: 1,
@@ -3980,6 +4094,19 @@ export default function UnifiedChatCenter({
                   const isAdmin = msg.sender === 'admin';
                   const msgKey = msg.id || `msg-idx-${idx}`;
                   const isHovered = hoveredMessageId === msgKey;
+                  const isPickerOpen = activeReactionPickerMid === msgKey;
+
+                  const adminReaction = getAdminReaction(msg);
+                  const hasHeart = adminReaction?.emoji === '❤️';
+                  const hasLike = adminReaction?.emoji === '👍';
+
+                  const reactionGroups = getReactionGroups(msg);
+                  const hasReactions = reactionGroups.length > 0;
+                  const totalReactionCount = reactionGroups.reduce((acc, g) => acc + g.count, 0);
+
+                  const reactionsTooltip = reactionGroups.length > 0
+                    ? reactionGroups.map(g => `${g.emoji} ${g.users.join(', ') || (g.byAdmin ? 'คุณ (แอดมิน)' : 'ลูกค้า')}`).join(' • ') + (adminReaction ? ' (คลิกเพื่อยกเลิก)' : '')
+                    : '';
 
                   return (
                     <div
@@ -3990,10 +4117,11 @@ export default function UnifiedChatCenter({
                         flexDirection: 'column',
                         alignItems: isAdmin ? 'flex-end' : 'flex-start',
                         position: 'relative',
-                        margin: '3px 0'
+                        margin: hasReactions ? '3px 0 10px 0' : '3px 0'
                       }}
                       onMouseEnter={() => setHoveredMessageId(msgKey)}
                       onMouseLeave={() => setHoveredMessageId(null)}
+                      onClick={() => setHoveredMessageId(msgKey)}
                     >
                       <div style={{
                         display: 'flex',
@@ -4367,20 +4495,229 @@ export default function UnifiedChatCenter({
                             )
                           )}
                         </div>
+
+                        {/* Reaction Pill Badge floating on bottom edge of bubble */}
+                        {hasReactions && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (adminReaction) {
+                                handleToggleReaction(msg, adminReaction.emoji);
+                              } else {
+                                handleToggleReaction(msg, '❤️');
+                              }
+                            }}
+                            title={reactionsTooltip}
+                            className="reaction-pill-badge"
+                            style={{
+                              position: 'absolute',
+                              bottom: '-11px',
+                              [isAdmin ? 'left' : 'right']: '12px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '20px',
+                              padding: '2px 7px',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                              cursor: 'pointer',
+                              zIndex: 6,
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {reactionGroups.map((grp, gIdx) => (
+                              <span key={gIdx} style={{ fontSize: '0.86rem', lineHeight: 1 }}>
+                                {grp.emoji}
+                              </span>
+                            ))}
+                            {totalReactionCount > 1 && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569', marginLeft: '1px' }}>
+                                {totalReactionCount}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Hover Action Buttons (Reply) */}
+                      {/* Hover Action Buttons (Reactions & Reply) */}
                       <div style={{
-                        opacity: hoveredMessageId === msgKey ? 1 : 0,
-                        pointerEvents: hoveredMessageId === msgKey ? 'auto' : 'none',
+                        opacity: (isHovered || isPickerOpen) ? 1 : 0,
+                        pointerEvents: (isHovered || isPickerOpen) ? 'auto' : 'none',
                         transition: 'opacity 0.15s ease',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        gap: '3px',
+                        position: 'relative'
                       }}>
+                        {/* Quick Heart Button */}
                         <button
                           type="button"
-                          onClick={() => handleStartReply(msg)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleReaction(msg, '❤️');
+                          }}
+                          title={hasHeart ? 'ยกเลิกส่งหัวใจ (❤️)' : 'ส่งหัวใจ (❤️)'}
+                          style={{
+                            border: hasHeart ? '1.5px solid #f43f5e' : 'none',
+                            backgroundColor: hasHeart ? '#ffe4e6' : '#f1f5f9',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            fontSize: '0.86rem',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                            transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                            transform: hasHeart ? 'scale(1.08)' : 'scale(1)'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.18)';
+                            if (!hasHeart) e.currentTarget.style.backgroundColor = '#ffe4e6';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = hasHeart ? 'scale(1.08)' : 'scale(1)';
+                            if (!hasHeart) e.currentTarget.style.backgroundColor = '#f1f5f9';
+                          }}
+                        >
+                          ❤️
+                        </button>
+
+                        {/* Quick Like Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleReaction(msg, '👍');
+                          }}
+                          title={hasLike ? 'ยกเลิกถูกใจ (👍)' : 'กดถูกใจ (👍)'}
+                          style={{
+                            border: hasLike ? '1.5px solid #3b82f6' : 'none',
+                            backgroundColor: hasLike ? '#dbeafe' : '#f1f5f9',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            fontSize: '0.86rem',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                            transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                            transform: hasLike ? 'scale(1.08)' : 'scale(1)'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.18)';
+                            if (!hasLike) e.currentTarget.style.backgroundColor = '#dbeafe';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.transform = hasLike ? 'scale(1.08)' : 'scale(1)';
+                            if (!hasLike) e.currentTarget.style.backgroundColor = '#f1f5f9';
+                          }}
+                        >
+                          👍
+                        </button>
+
+                        {/* More Reactions / Smile Trigger */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveReactionPickerMid(prev => prev === msgKey ? null : msgKey);
+                            }}
+                            title="เลือกแสดงความรู้สึกอื่นๆ"
+                            style={{
+                              border: 'none',
+                              backgroundColor: isPickerOpen ? '#e2e8f0' : '#f1f5f9',
+                              color: '#64748b',
+                              borderRadius: '50%',
+                              width: '28px',
+                              height: '28px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#e2e8f0';
+                              e.currentTarget.style.color = '#0f172a';
+                            }}
+                            onMouseOut={(e) => {
+                              if (!isPickerOpen) {
+                                e.currentTarget.style.backgroundColor = '#f1f5f9';
+                                e.currentTarget.style.color = '#64748b';
+                              }
+                            }}
+                          >
+                            <Smile size={14} />
+                          </button>
+
+                          {/* Floating Reaction Picker Popover */}
+                          {isPickerOpen && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                position: 'absolute',
+                                bottom: '34px',
+                                [isAdmin ? 'right' : 'left']: 0,
+                                backgroundColor: '#ffffff',
+                                borderRadius: '24px',
+                                padding: '4px 8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18), 0 4px 6px -2px rgba(0,0,0,0.06)',
+                                border: '1px solid #e2e8f0',
+                                zIndex: 50,
+                                whiteSpace: 'nowrap',
+                                animation: 'scaleIn 0.15s ease'
+                              }}
+                            >
+                              {['❤️', '👍', '😂', '😮', '😢', '🙏', '🎉'].map((em) => {
+                                const isSelected = adminReaction?.emoji === em;
+                                return (
+                                  <button
+                                    key={em}
+                                    type="button"
+                                    onClick={() => handleToggleReaction(msg, em)}
+                                    title={isSelected ? `ยกเลิก ${em}` : `ส่ง ${em}`}
+                                    style={{
+                                      border: 'none',
+                                      background: isSelected ? '#f1f5f9' : 'transparent',
+                                      borderRadius: '50%',
+                                      width: '32px',
+                                      height: '32px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '1.15rem',
+                                      cursor: 'pointer',
+                                      transition: 'transform 0.12s ease',
+                                      transform: isSelected ? 'scale(1.2)' : 'scale(1)'
+                                    }}
+                                    onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.35)'; }}
+                                    onMouseOut={(e) => { e.currentTarget.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)'; }}
+                                  >
+                                    {em}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reply Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartReply(msg);
+                          }}
                           title="ตอบกลับข้อความนี้ (หรือดับเบิลคลิกที่ข้อความ)"
                           style={{
                             border: 'none',

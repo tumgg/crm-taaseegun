@@ -210,6 +210,58 @@ export default async function handler(req, res) {
 
               console.log(`Live Facebook message inserted for Page [${pageName}] from [${senderName}]: ${text}`);
             }
+
+            // 2. Handle Customer Reactions (event.reaction)
+            if (event.reaction && event.reaction.mid) {
+              const targetMid = event.reaction.mid;
+              const emoji = event.reaction.emoji || (event.reaction.reaction === 'love' ? '❤️' : (event.reaction.reaction === 'like' ? '👍' : '❤️'));
+              const action = event.reaction.action; // 'react' | 'unreact'
+              const senderPsid = event.sender?.id;
+
+              const leadId = `fb-live-${senderPsid}`;
+              try {
+                const getLeadRes = await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
+                  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                const existingRows = await getLeadRes.json();
+                if (Array.isArray(existingRows) && existingRows.length > 0) {
+                  const lead = existingRows[0];
+                  const msgs = Array.isArray(lead.messages) ? [...lead.messages] : [];
+                  const msgIdx = msgs.findIndex(m => m.id === targetMid);
+                  if (msgIdx !== -1) {
+                    const targetMsg = { ...msgs[msgIdx] };
+                    const currentReactions = Array.isArray(targetMsg.reactions) ? [...targetMsg.reactions] : [];
+                    const custIdx = currentReactions.findIndex(r => r.by === 'customer');
+
+                    if (action === 'unreact') {
+                      if (custIdx !== -1) currentReactions.splice(custIdx, 1);
+                    } else {
+                      if (custIdx !== -1) {
+                        currentReactions[custIdx] = { ...currentReactions[custIdx], emoji, timestamp: Date.now() };
+                      } else {
+                        currentReactions.push({ emoji, by: 'customer', userName: lead.name || 'ลูกค้า', timestamp: Date.now() });
+                      }
+                    }
+
+                    targetMsg.reactions = currentReactions;
+                    targetMsg.reaction = currentReactions.length > 0 ? currentReactions[0].emoji : null;
+                    msgs[msgIdx] = targetMsg;
+
+                    await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(leadId)}`, {
+                      method: 'PATCH',
+                      headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ messages: msgs, updated_at: new Date().toISOString() })
+                    });
+                  }
+                }
+              } catch (reactErr) {
+                console.warn('Webhook reaction sync warning:', reactErr);
+              }
+            }
           } catch (eventErr) {
             console.error('Error processing single messaging event:', eventErr);
           }

@@ -472,3 +472,63 @@ export async function sendFacebookPrivateReply(pageId, commentId, messageText) {
   }
   return data;
 }
+
+/**
+ * React to a Facebook Messenger message (sender_action: react / unreact)
+ */
+export async function reactFacebookMessage(pageId, recipientPsid, messageMid, reaction = '❤️', isRemoving = false) {
+  const token = getPageToken(pageId);
+  if (!token) throw new Error(`No token found for pageId ${pageId}`);
+
+  const postBody = {
+    recipient: { id: recipientPsid },
+    sender_action: isRemoving ? 'unreact' : 'react',
+    payload: isRemoving ? { message_id: messageMid } : { message_id: messageMid, reaction }
+  };
+
+  const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(postBody)
+  });
+  const data = await res.json();
+  if (data.error) {
+    console.warn('Facebook Messenger react API warning:', data.error);
+  }
+  return data;
+}
+
+/**
+ * React or like a Facebook post comment
+ */
+export async function reactFacebookComment(pageId, commentId, reaction = 'LIKE', isRemoving = false) {
+  const token = getPageToken(pageId);
+  if (!token) throw new Error(`No token found for pageId ${pageId}`);
+
+  if (isRemoving) {
+    const url = `https://graph.facebook.com/v19.0/${commentId}/likes?access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { method: 'DELETE' });
+    return await res.json();
+  }
+
+  let reactionType = 'LIKE';
+  if (reaction === '❤️' || reaction === 'LOVE') reactionType = 'LOVE';
+  else if (reaction === '😂' || reaction === 'HAHA') reactionType = 'HAHA';
+  else if (reaction === '😮' || reaction === 'WOW') reactionType = 'WOW';
+  else if (reaction === '😢' || reaction === 'SAD') reactionType = 'SAD';
+  else if (reaction === '😡' || reaction === 'ANGRY') reactionType = 'ANGRY';
+
+  try {
+    const url = `https://graph.facebook.com/v19.0/${commentId}/reactions?type=${reactionType}&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { method: 'POST' });
+    const data = await res.json();
+    if (!data.error) return data;
+  } catch (e) {
+    // fallback to likes
+  }
+
+  const likeUrl = `https://graph.facebook.com/v19.0/${commentId}/likes?access_token=${encodeURIComponent(token)}`;
+  const likeRes = await fetch(likeUrl, { method: 'POST' });
+  return await likeRes.json();
+}

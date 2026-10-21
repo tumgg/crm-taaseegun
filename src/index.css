@@ -477,3 +477,24 @@ a {
   opacity: 0.95;
 }
 
+@keyframes scaleIn {
+  from {
+    transform: scale(0.65);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.reaction-pill-badge {
+  animation: scaleIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.reaction-pill-badge:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
