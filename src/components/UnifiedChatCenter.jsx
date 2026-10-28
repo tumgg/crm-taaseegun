@@ -148,7 +148,7 @@ export function getAvatarBg(name) {
   return colors[hash % colors.length];
 }
 
-export function CustomerAvatar({
+export const CustomerAvatar = React.memo(function CustomerAvatar({
   lead,
   size = 40,
   border,
@@ -252,7 +252,7 @@ export function CustomerAvatar({
       )}
     </div>
   );
-}
+});
 
 export function getPageTheme(channelId) {
   if (channelId === REAL_TAASEEGUN_PAGE_ID) {
@@ -571,8 +571,10 @@ export default function UnifiedChatCenter({
 
   // Message Reply & Quoting State
   const [replyingToMessage, setReplyingToMessage] = useState(null); // { id, mid, sender, name, text, attachments, time }
-  const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [activeReactionPickerMid, setActiveReactionPickerMid] = useState(null);
+  const isSyncingFbRef = useRef(false);
+  const replyTextRef = useRef('');
+  replyTextRef.current = replyText;
 
   // Dedicated Multi-Photo Selector (accept="image/*" multiple)
   const handleImageSelect = (e) => {
@@ -860,6 +862,10 @@ export default function UnifiedChatCenter({
 
   // Sync real live conversations via secure serverless proxy for all connected pages
   const handleSyncRealFacebook = async (silent = false) => {
+    // Prevent overlapping sync requests
+    if (isSyncingFbRef.current) return;
+    isSyncingFbRef.current = true;
+
     // 4 Real pages to sync securely via serverless proxy /api/facebook
     const pagesToSync = [
       { id: REAL_GOOD_VIBES_PAGE_ID, name: 'รับพ่นสี Texture ฉาบเทคเจอร์ ราคาถูก By Good Vibes' },
@@ -1028,18 +1034,38 @@ export default function UnifiedChatCenter({
     } catch (err) {
       if (!silent) alert(`ไม่สามารถดึงข้อมูลจาก Facebook API ได้: ${err.message}`);
     } finally {
+      isSyncingFbRef.current = false;
       if (!silent) setIsSyncingFb(false);
     }
   };
 
-  // Background Auto-sync effect (every 10 seconds in background)
+  const [isRealtimeWebhookActive, setIsRealtimeWebhookActive] = useState(false);
+
+  // Background Auto-sync effect:
+  // - Supabase Realtime delivers incoming messages in <1s.
+  // - Background polling is an occasional fallback (90s if realtime active, otherwise 45s).
+  // - Pauses when tab is hidden or when user is actively typing reply.
   useEffect(() => {
     if (!isAutoSyncEnabled) return;
+    const pollInterval = isRealtimeWebhookActive ? 90000 : 45000;
     const interval = setInterval(() => {
+      if (document.hidden) return;
+      if (replyTextRef.current && replyTextRef.current.trim() !== '') return;
       handleSyncRealFacebook(true);
-    }, 10000);
+    }, pollInterval);
     return () => clearInterval(interval);
-  }, [isAutoSyncEnabled, facebookPages, isSoundEnabled]);
+  }, [isAutoSyncEnabled, isRealtimeWebhookActive]);
+
+  // Sync on returning to the tab if user was away
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isAutoSyncEnabled) {
+        handleSyncRealFacebook(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isAutoSyncEnabled]);
 
   // Initial background sync on mount (after 1.5 seconds)
   useEffect(() => {
@@ -1048,8 +1074,6 @@ export default function UnifiedChatCenter({
     }, 1500);
     return () => clearTimeout(timer);
   }, []);
-
-  const [isRealtimeWebhookActive, setIsRealtimeWebhookActive] = useState(false);
 
   // Subscribe to Instant 1-Second Real-Time Webhook Messages via Supabase Realtime
   useEffect(() => {
@@ -1663,53 +1687,55 @@ export default function UnifiedChatCenter({
   };
 
   // Filter conversations and sort so the TRULY latest activity is on top across all pages
-  const filteredConversations = sortLeadsByLatest(
-    leads.filter(lead => {
-      const q = (searchQuery || '').trim().toLowerCase();
+  const filteredConversations = useMemo(() => {
+    return sortLeadsByLatest(
+      leads.filter(lead => {
+        const q = (searchQuery || '').trim().toLowerCase();
 
-      let matchesSearch = true;
-      if (q) {
-        const matchesName = (lead.name || '').toLowerCase().includes(q);
-        const matchesInquiry = (lead.inquiry || '').toLowerCase().includes(q);
-        const matchesSourceTitle = (lead.sourceTitle || '').toLowerCase().includes(q);
-        const matchesNotes = (lead.notes || '').toLowerCase().includes(q);
-        const matchesContact = (lead.contact || '').toLowerCase().includes(q) || (lead.phone || '').toLowerCase().includes(q) || (lead.lineId || '').toLowerCase().includes(q);
-        const matchesStatus = (lead.status || '').toLowerCase().includes(q);
-        const matchesChannelName = (lead.channelName || '').toLowerCase().includes(q);
-        const matchesCustomerRole = (lead.customerRole || '').toLowerCase().includes(q);
+        let matchesSearch = true;
+        if (q) {
+          const matchesName = (lead.name || '').toLowerCase().includes(q);
+          const matchesInquiry = (lead.inquiry || '').toLowerCase().includes(q);
+          const matchesSourceTitle = (lead.sourceTitle || '').toLowerCase().includes(q);
+          const matchesNotes = (lead.notes || '').toLowerCase().includes(q);
+          const matchesContact = (lead.contact || '').toLowerCase().includes(q) || (lead.phone || '').toLowerCase().includes(q) || (lead.lineId || '').toLowerCase().includes(q);
+          const matchesStatus = (lead.status || '').toLowerCase().includes(q);
+          const matchesChannelName = (lead.channelName || '').toLowerCase().includes(q);
+          const matchesCustomerRole = (lead.customerRole || '').toLowerCase().includes(q);
 
-        // Search through all messages in thread (customer + admin messages, reply quotes, file attachments)
-        const matchesMessages = Array.isArray(lead.messages) && lead.messages.some(m => {
-          if (!m) return false;
-          if (typeof m.text === 'string' && m.text.toLowerCase().includes(q)) return true;
-          if (typeof m.adminName === 'string' && m.adminName.toLowerCase().includes(q)) return true;
-          if (typeof m.replyTo?.text === 'string' && m.replyTo.text.toLowerCase().includes(q)) return true;
-          if (Array.isArray(m.attachments) && m.attachments.some(att =>
-            (typeof att?.name === 'string' && att.name.toLowerCase().includes(q)) ||
-            (typeof att?.type === 'string' && att.type.toLowerCase().includes(q))
-          )) return true;
-          return false;
-        });
+          // Search through all messages in thread (customer + admin messages, reply quotes, file attachments)
+          const matchesMessages = Array.isArray(lead.messages) && lead.messages.some(m => {
+            if (!m) return false;
+            if (typeof m.text === 'string' && m.text.toLowerCase().includes(q)) return true;
+            if (typeof m.adminName === 'string' && m.adminName.toLowerCase().includes(q)) return true;
+            if (typeof m.replyTo?.text === 'string' && m.replyTo.text.toLowerCase().includes(q)) return true;
+            if (Array.isArray(m.attachments) && m.attachments.some(att =>
+              (typeof att?.name === 'string' && att.name.toLowerCase().includes(q)) ||
+              (typeof att?.type === 'string' && att.type.toLowerCase().includes(q))
+            )) return true;
+            return false;
+          });
 
-        matchesSearch = matchesName || matchesInquiry || matchesSourceTitle || matchesNotes || matchesContact || matchesStatus || matchesChannelName || matchesCustomerRole || matchesMessages;
-      }
+          matchesSearch = matchesName || matchesInquiry || matchesSourceTitle || matchesNotes || matchesContact || matchesStatus || matchesChannelName || matchesCustomerRole || matchesMessages;
+        }
 
-      let matchesType = true;
-      if (filterType === 'due_followup') {
-        matchesType = isLeadWithinLast7Days(lead) && (isFollowUpDue(lead.followUpDate) || detectFollowUpStatus(lead).needsFollowUp);
-      } else if (filterType === 'unreplied') {
-        matchesType = isLeadWithinLast7Days(lead) && !isLeadReplied(lead);
-      } else if (filterType === 'replied') {
-        matchesType = isLeadWithinLast7Days(lead) && isLeadReplied(lead);
-      } else if (filterType !== 'all') {
-        matchesType = lead.sourceType === filterType;
-      }
+        let matchesType = true;
+        if (filterType === 'due_followup') {
+          matchesType = isLeadWithinLast7Days(lead) && (isFollowUpDue(lead.followUpDate) || detectFollowUpStatus(lead).needsFollowUp);
+        } else if (filterType === 'unreplied') {
+          matchesType = isLeadWithinLast7Days(lead) && !isLeadReplied(lead);
+        } else if (filterType === 'replied') {
+          matchesType = isLeadWithinLast7Days(lead) && isLeadReplied(lead);
+        } else if (filterType !== 'all') {
+          matchesType = lead.sourceType === filterType;
+        }
 
-      const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? lead.platform === 'facebook' : lead.channel === filterChannel);
+        const matchesChannel = filterChannel === 'all' || (filterChannel === 'all-fb' ? lead.platform === 'facebook' : lead.channel === filterChannel);
 
-      return matchesSearch && matchesType && matchesChannel;
-    })
-  );
+        return matchesSearch && matchesType && matchesChannel;
+      })
+    );
+  }, [leads, searchQuery, filterType, filterChannel]);
 
   // Intent analysis of current active lead
   const currentIntent = activeLead ? analyzeMessageIntent(
@@ -2606,7 +2632,7 @@ export default function UnifiedChatCenter({
               const nextState = !isAutoSyncEnabled;
               setIsAutoSyncEnabled(nextState);
               if (nextState) {
-                setToastNotification('🟢 เปิดระบบ Auto-Sync: คอยดึงแชทใหม่อัตโนมัติทุก 10 วินาที');
+                setToastNotification('🟢 เปิดระบบ Auto-Sync: ซิงค์แชทใหม่อัตโนมัติในพื้นหลัง');
                 setTimeout(() => setToastNotification(null), 4000);
               } else {
                 setToastNotification('⚪ ปิดระบบ Auto-Sync เรียบร้อย');
@@ -2626,7 +2652,7 @@ export default function UnifiedChatCenter({
               border: isAutoSyncEnabled ? '1px solid #86efac' : '1px solid #cbd5e1',
               cursor: 'pointer'
             }}
-            title="เปิด/ปิดการเช็กแชทใหม่ให้อัตโนมัติทุก 10 วินาทีในพื้นหลัง"
+            title="เปิด/ปิดการเช็กแชทใหม่อัตโนมัติในพื้นหลัง"
           >
             <span style={{
               width: '7px',
@@ -2635,7 +2661,7 @@ export default function UnifiedChatCenter({
               backgroundColor: isAutoSyncEnabled ? '#10b981' : '#94a3b8',
               display: 'inline-block'
             }} />
-            <span>Auto-Sync 10s</span>
+            <span>Auto-Sync</span>
           </button>
         </div>
       </div>
@@ -3032,9 +3058,7 @@ export default function UnifiedChatCenter({
                 const isRecent = isLeadWithinLast7Days(lead);
                 const isUnrepliedAlert = !isReplied && isRecent;
                 const hasDueFollowUp = isRecent && isFollowUpDue(lead.followUpDate);
-                const closingInfo = analyzeClosingScore(lead);
-                const followUpInfo = detectFollowUpStatus(lead);
-                const isFollowUpNeeded = isRecent && (hasDueFollowUp || followUpInfo.needsFollowUp);
+                const isFollowUpNeeded = isRecent && (hasDueFollowUp || detectFollowUpStatus(lead).needsFollowUp);
                 const validThreadMsgs = Array.isArray(lead.messages)
                   ? lead.messages.filter(m => {
                       if (!m) return false;
@@ -4153,7 +4177,6 @@ export default function UnifiedChatCenter({
                 {(activeLead.messages || []).map((msg, idx) => {
                   const isAdmin = msg.sender === 'admin';
                   const msgKey = msg.id || `msg-idx-${idx}`;
-                  const isHovered = hoveredMessageId === msgKey;
                   const isPickerOpen = activeReactionPickerMid === msgKey;
 
                   const adminReaction = getAdminReaction(msg);
@@ -4172,6 +4195,7 @@ export default function UnifiedChatCenter({
                     <div
                       key={msgKey}
                       id={`msg-bubble-${msgKey}`}
+                      className={`msg-bubble-row ${isPickerOpen ? 'picker-open' : ''}`}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -4179,9 +4203,6 @@ export default function UnifiedChatCenter({
                         position: 'relative',
                         margin: hasReactions ? '3px 0 10px 0' : '3px 0'
                       }}
-                      onMouseEnter={() => setHoveredMessageId(msgKey)}
-                      onMouseLeave={() => setHoveredMessageId(null)}
-                      onClick={() => setHoveredMessageId(msgKey)}
                     >
                       <div style={{
                         display: 'flex',
@@ -4633,16 +4654,16 @@ export default function UnifiedChatCenter({
                         )}
                       </div>
 
-                      {/* Hover Action Buttons (Reactions & Reply) */}
-                      <div style={{
-                        opacity: (isHovered || isPickerOpen) ? 1 : 0,
-                        pointerEvents: (isHovered || isPickerOpen) ? 'auto' : 'none',
-                        transition: 'opacity 0.15s ease',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        position: 'relative'
-                      }}>
+                      {/* Hover Action Buttons (Reactions & Reply) - Pure 60fps CSS */}
+                      <div
+                        className="msg-hover-actions"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          position: 'relative'
+                        }}
+                      >
                         {/* Quick Heart Button */}
                         <button
                           type="button"

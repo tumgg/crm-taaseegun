@@ -498,3 +498,15 @@ a {
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
+/* 60fps Zero-Lag Message Hover Actions (Replaces heavy React state re-renders) */
+.msg-bubble-row .msg-hover-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.msg-bubble-row:hover .msg-hover-actions,
+.msg-bubble-row.picker-open .msg-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+}

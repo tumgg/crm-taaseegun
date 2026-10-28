@@ -33,12 +33,41 @@ export function loadStoredLeads(fallbackLeads) {
   return fallbackLeads;
 }
 
-export function saveStoredLeads(leads) {
-  try {
-    localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads));
-  } catch (err) {
-    console.warn('Failed to save leads to localStorage', err);
+let saveLeadsDebounceTimer = null;
+let lastLeadsToPersist = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (saveLeadsDebounceTimer && lastLeadsToPersist) {
+      try {
+        localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(lastLeadsToPersist));
+      } catch (err) {
+        console.warn('Failed emergency save of leads beforeunload', err);
+      }
+    }
+  });
+}
+
+export function saveStoredLeads(leads, immediate = false) {
+  lastLeadsToPersist = leads;
+  if (immediate) {
+    if (saveLeadsDebounceTimer) clearTimeout(saveLeadsDebounceTimer);
+    try {
+      localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads));
+    } catch (err) {
+      console.warn('Failed to save leads to localStorage', err);
+    }
+    return;
   }
+
+  if (saveLeadsDebounceTimer) clearTimeout(saveLeadsDebounceTimer);
+  saveLeadsDebounceTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads));
+    } catch (err) {
+      console.warn('Failed to save leads to localStorage', err);
+    }
+  }, 1000);
 }
 
 export function loadStoredPages(fallbackPages) {

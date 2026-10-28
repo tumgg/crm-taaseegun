@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Header from './components/Header';
-import MediaKitAnalytics from './components/MediaKitAnalytics';
-import LeadManagementCrm from './components/LeadManagementCrm';
 import UnifiedChatCenter from './components/UnifiedChatCenter';
-import ApiIntegrationGuide from './components/ApiIntegrationGuide';
-import SalesPipelineKanban from './components/SalesPipelineKanban';
-import AddLeadModal from './components/AddLeadModal';
-import TeamManagementModal from './components/TeamManagementModal';
 import LoginScreen, { teamAccounts as defaultTeamAccounts } from './components/LoginScreen';
+
+const MediaKitAnalytics = lazy(() => import('./components/MediaKitAnalytics'));
+const LeadManagementCrm = lazy(() => import('./components/LeadManagementCrm'));
+const ApiIntegrationGuide = lazy(() => import('./components/ApiIntegrationGuide'));
+const SalesPipelineKanban = lazy(() => import('./components/SalesPipelineKanban'));
+const AddLeadModal = lazy(() => import('./components/AddLeadModal'));
+const TeamManagementModal = lazy(() => import('./components/TeamManagementModal'));
 import { 
   initialFacebookPages, 
   initialLeads,
@@ -67,6 +68,7 @@ export default function App() {
     activeAdmins: 3
   });
   const syncedLeadsSnapshotRef = useRef(new Map());
+  const lastLeadObjRef = useRef(new Map());
   const isInitialCloudLoadCompleteRef = useRef(false);
   const isProcessingRealtimeChangeRef = useRef(false);
 
@@ -193,6 +195,12 @@ export default function App() {
     const modifiedLeads = [];
 
     for (const lead of leads) {
+      // Fast path: if object reference didn't change at all, skip heavy JSON.stringify!
+      if (lastLeadObjRef.current.get(lead.id) === lead) {
+        continue;
+      }
+      lastLeadObjRef.current.set(lead.id, lead);
+
       const snapshotStr = syncedLeadsSnapshotRef.current.get(lead.id);
       const currentStr = JSON.stringify(lead);
       if (snapshotStr !== currentStr) {
@@ -205,6 +213,7 @@ export default function App() {
     for (const [id] of syncedLeadsSnapshotRef.current.entries()) {
       if (!currentLeadIds.has(id)) {
         syncedLeadsSnapshotRef.current.delete(id);
+        lastLeadObjRef.current.delete(id);
         deleteLeadFromCloud(id);
       }
     }
@@ -510,61 +519,77 @@ export default function App() {
         )}
 
         {activeTab === 'pipeline' && (
-          <SalesPipelineKanban
-            leads={leads}
-            setLeads={setLeads}
-            facebookPages={facebookPages}
-            onOpenChat={handleOpenChat}
-            onOpenAddLeadModal={() => setIsAddLeadModalOpen(true)}
-          />
+          <Suspense fallback={<div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>⏳ กำลังโหลด Sales Pipeline Kanban...</div>}>
+            <SalesPipelineKanban
+              leads={leads}
+              setLeads={setLeads}
+              facebookPages={facebookPages}
+              onOpenChat={handleOpenChat}
+              onOpenAddLeadModal={() => setIsAddLeadModalOpen(true)}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'crm' && (
-          <LeadManagementCrm
-            leads={leads}
-            setLeads={setLeads}
-            facebookPages={facebookPages}
-            onOpenAddLeadModal={() => setIsAddLeadModalOpen(true)}
-            selectedChannelFilter={selectedChannelFilter}
-            setSelectedChannelFilter={setSelectedChannelFilter}
-            onOpenChat={handleOpenChat}
-          />
+          <Suspense fallback={<div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>⏳ กำลังโหลด Lead Management CRM...</div>}>
+            <LeadManagementCrm
+              leads={leads}
+              setLeads={setLeads}
+              facebookPages={facebookPages}
+              onOpenAddLeadModal={() => setIsAddLeadModalOpen(true)}
+              selectedChannelFilter={selectedChannelFilter}
+              setSelectedChannelFilter={setSelectedChannelFilter}
+              onOpenChat={handleOpenChat}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'analytics' && (
-          <MediaKitAnalytics
-            facebookPages={facebookPages}
-            onSelectPageForCrm={handleSelectPageForCrm}
-            leads={leads}
-            setLeads={setLeads}
-            onOpenChat={handleOpenChat}
-          />
+          <Suspense fallback={<div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>⏳ กำลังโหลด Media Kit & Analytics...</div>}>
+            <MediaKitAnalytics
+              facebookPages={facebookPages}
+              onSelectPageForCrm={handleSelectPageForCrm}
+              leads={leads}
+              setLeads={setLeads}
+              onOpenChat={handleOpenChat}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'api-setup' && (
-          <ApiIntegrationGuide
-            facebookPages={facebookPages}
-            setFacebookPages={setFacebookPages}
-          />
+          <Suspense fallback={<div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>⏳ กำลังโหลด การเชื่อมต่อ Facebook API...</div>}>
+            <ApiIntegrationGuide
+              facebookPages={facebookPages}
+              setFacebookPages={setFacebookPages}
+            />
+          </Suspense>
         )}
       </main>
 
       {/* Add Lead Modal */}
-      <AddLeadModal
-        isOpen={isAddLeadModalOpen}
-        onClose={() => setIsAddLeadModalOpen(false)}
-        onAddLead={handleAddLead}
-        facebookPages={facebookPages}
-      />
+      {isAddLeadModalOpen && (
+        <Suspense fallback={null}>
+          <AddLeadModal
+            isOpen={isAddLeadModalOpen}
+            onClose={() => setIsAddLeadModalOpen(false)}
+            onAddLead={handleAddLead}
+            facebookPages={facebookPages}
+          />
+        </Suspense>
+      )}
 
       {/* Team Management Modal */}
-      <TeamManagementModal
-        isOpen={isTeamModalOpen}
-        onClose={() => setIsTeamModalOpen(false)}
-        teamMembers={teamMembers}
-        onSaveTeamMembers={handleSaveTeamMembers}
-        currentUser={currentUser}
-      />
+      {isTeamModalOpen && (
+        <Suspense fallback={null}>
+          <TeamManagementModal
+            isOpen={isTeamModalOpen}
+            onClose={() => setIsTeamModalOpen(false)}
+            teamMembers={teamMembers}
+            onSaveTeamMembers={handleSaveTeamMembers}
+            currentUser={currentUser}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
