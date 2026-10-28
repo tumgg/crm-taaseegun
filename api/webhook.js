@@ -262,6 +262,53 @@ export default async function handler(req, res) {
                 console.warn('Webhook reaction sync warning:', reactErr);
               }
             }
+
+            // 3. Handle Customer Read Receipts (event.read with watermark)
+            if (event.read && event.read.watermark) {
+              const watermark = event.read.watermark;
+              const senderPsid = event.sender?.id;
+              const leadId = `fb-live-${senderPsid}`;
+
+              try {
+                const getLeadRes = await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
+                  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                const existingRows = await getLeadRes.json();
+                if (Array.isArray(existingRows) && existingRows.length > 0) {
+                  const lead = existingRows[0];
+                  const msgs = Array.isArray(lead.messages) ? [...lead.messages] : [];
+                  let hasChanges = false;
+
+                  const updatedMsgs = msgs.map(m => {
+                    const mTime = m.timestamp || (m.created_time ? new Date(m.created_time).getTime() : 0);
+                    if (m.sender === 'admin' && mTime > 0 && mTime <= watermark && !m.isRead) {
+                      hasChanges = true;
+                      return { ...m, isRead: true, readAt: watermark };
+                    }
+                    return m;
+                  });
+
+                  if (hasChanges || !lead.read_watermark || lead.read_watermark < watermark) {
+                    await fetch(`${SUPABASE_URL}/rest/v1/crm_leads?id=eq.${encodeURIComponent(leadId)}`, {
+                      method: 'PATCH',
+                      headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        read_watermark: watermark,
+                        messages: updatedMsgs,
+                        updated_at: new Date().toISOString()
+                      })
+                    });
+                    console.log(`Updated read watermark ${watermark} for Lead ${leadId}`);
+                  }
+                }
+              } catch (readErr) {
+                console.warn('Webhook read watermark sync warning:', readErr);
+              }
+            }
           } catch (eventErr) {
             console.error('Error processing single messaging event:', eventErr);
           }

@@ -1985,6 +1985,35 @@ export default function UnifiedChatCenter({
     }
   };
 
+  // Helper to determine if an admin message has been read by the customer
+  const isCustomerMessageRead = (msg, msgIdx, allMessages, lead) => {
+    if (!msg || msg.sender !== 'admin') return false;
+
+    // 1. Explicit read flags
+    if (msg.isRead === true || msg.read === true || msg.status === 'read' || msg.seen === true) {
+      return true;
+    }
+
+    const msgTime = msg.timestamp || (msg.created_time ? new Date(msg.created_time).getTime() : 0);
+
+    // 2. Facebook Webhook watermark on lead
+    const watermark = lead?.readWatermark || lead?.customerReadWatermark || lead?.read_watermark;
+    if (watermark && msgTime > 0 && msgTime <= watermark) {
+      return true;
+    }
+
+    // 3. Customer Reply Heuristic:
+    // Any admin message followed by any customer message in the conversation has been read
+    if (Array.isArray(allMessages) && allMessages.length > 0) {
+      const hasLaterCustomerMsg = allMessages.slice(msgIdx + 1).some(m => {
+        return m.sender === 'lead' || m.sender === 'customer' || m.isCustomer === true;
+      });
+      if (hasLaterCustomerMsg) return true;
+    }
+
+    return false;
+  };
+
   const handleScrollToMessage = (targetMsgId) => {
     if (!targetMsgId) return;
     const el = document.getElementById(`msg-bubble-${targetMsgId}`);
@@ -3545,6 +3574,37 @@ export default function UnifiedChatCenter({
                         </a>
                       )}
 
+                      {/* Latest Message Read Badge */}
+                      {(() => {
+                        const msgs = activeLead?.messages || [];
+                        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+                        if (lastMsg && lastMsg.sender === 'admin') {
+                          const isRead = isCustomerMessageRead(lastMsg, msgs.length - 1, msgs, activeLead);
+                          return (
+                            <span
+                              title={isRead ? "ลูกค้าเปิดอ่านข้อความล่าสุดแล้ว" : "ส่งถึงแล้ว (ลูกค้ายังไม่ได้อ่านข้อความล่าสุด)"}
+                              style={{
+                                fontSize: '0.66rem',
+                                fontWeight: '700',
+                                color: isRead ? '#059669' : '#64748b',
+                                backgroundColor: isRead ? '#ecfdf5' : '#f1f5f9',
+                                padding: '2px 7px',
+                                borderRadius: '999px',
+                                border: isRead ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              <CheckCheck size={11} color={isRead ? '#059669' : '#94a3b8'} />
+                              <span>{isRead ? 'ลูกค้าอ่านแล้ว' : 'ส่งแล้ว (ยังไม่อ่าน)'}</span>
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {/* AI Intent Badge */}
                       {currentIntent && (
                         <span style={{
@@ -4490,9 +4550,42 @@ export default function UnifiedChatCenter({
                                 <AlertCircle size={11} color="#fca5a5" />
                                 <span>ไม่ส่งถึงลูกค้า (เปิดใน Meta ↗)</span>
                               </span>
-                            ) : (
-                              <CheckCheck size={12} />
-                            )
+                            ) : (() => {
+                              const isRead = isCustomerMessageRead(msg, idx, activeLead?.messages, activeLead);
+                              return isRead ? (
+                                <span
+                                  title="ลูกค้าเปิดอ่านข้อความนี้แล้ว"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '2px',
+                                    color: '#ffffff',
+                                    fontWeight: '700',
+                                    fontSize: '0.64rem',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+                                    padding: '1px 5px',
+                                    borderRadius: '10px'
+                                  }}
+                                >
+                                  <CheckCheck size={12} color="#67e8f9" />
+                                  <span>อ่านแล้ว</span>
+                                </span>
+                              ) : (
+                                <span
+                                  title="ส่งถึงแล้ว (ลูกค้ายังไม่ได้เปิดอ่าน)"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '2px',
+                                    color: 'rgba(255, 255, 255, 0.72)',
+                                    fontSize: '0.64rem'
+                                  }}
+                                >
+                                  <CheckCheck size={12} opacity={0.8} />
+                                  <span>ส่งแล้ว</span>
+                                </span>
+                              );
+                            })()
                           )}
                         </div>
 

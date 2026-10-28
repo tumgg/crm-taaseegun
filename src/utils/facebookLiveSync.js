@@ -221,6 +221,22 @@ export function parseFacebookMessagesArray(dataArray, pageId, pageName, customer
     }
   });
 
+  // Resolve read status: Any admin message sent before a customer message is definitively read!
+  let lastCustomerTimestamp = 0;
+  parsed.forEach(item => {
+    if (item.sender === 'lead' && (item.timestamp || 0) > lastCustomerTimestamp) {
+      lastCustomerTimestamp = item.timestamp || 0;
+    }
+  });
+
+  parsed.forEach(item => {
+    if (item.sender === 'admin') {
+      if (lastCustomerTimestamp > 0 && (item.timestamp || 0) <= lastCustomerTimestamp) {
+        item.isRead = true;
+      }
+    }
+  });
+
   return parsed;
 }
 
