@@ -3058,7 +3058,9 @@ export default function UnifiedChatCenter({
                 const isRecent = isLeadWithinLast7Days(lead);
                 const isUnrepliedAlert = !isReplied && isRecent;
                 const hasDueFollowUp = isRecent && isFollowUpDue(lead.followUpDate);
-                const isFollowUpNeeded = isRecent && (hasDueFollowUp || detectFollowUpStatus(lead).needsFollowUp);
+                const followUpInfo = detectFollowUpStatus(lead);
+                const closingInfo = analyzeClosingScore(lead);
+                const isFollowUpNeeded = isRecent && (hasDueFollowUp || followUpInfo?.needsFollowUp);
                 const validThreadMsgs = Array.isArray(lead.messages)
                   ? lead.messages.filter(m => {
                       if (!m) return false;
