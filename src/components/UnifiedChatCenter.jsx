@@ -495,6 +495,190 @@ export function renderMessageTextWithLinks(text, query, isAdmin = false) {
   return parts.length > 0 ? parts : highlightSearchTerm(text, query, isAdmin);
 }
 
+// Helper: Robust parser for dates in any format (ISO, epoch, Thai string, lead date)
+export function parseAnyDate(val) {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  if (typeof val === 'number' && val > 0) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (typeof val === 'string') {
+    const str = val.trim();
+    if (!str) return null;
+    if (/^\d{10,13}$/.test(str)) {
+      const d = new Date(Number(str));
+      if (!isNaN(d.getTime())) return d;
+    }
+    let d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+    d = new Date(str.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d;
+
+    // Support Thai date strings e.g. "02 พ.ย. 2569 22:21" or "2 พ.ย. 69" or "9 ตุลาคม 2569"
+    const thaiMonths = {
+      'ม.ค.': 0, 'มกราคม': 0, 'มกรา': 0,
+      'ก.พ.': 1, 'กุมภาพันธ์': 1, 'กุมภา': 1,
+      'มี.ค.': 2, 'มีนาคม': 2, 'มีนา': 2,
+      'เม.ย.': 3, 'เมษายน': 3, 'เมษา': 3,
+      'พ.ค.': 4, 'พฤษภาคม': 4, 'พฤษภา': 4,
+      'มิ.ย.': 5, 'มิถุนายน': 5, 'มิถุนา': 5,
+      'ก.ค.': 6, 'กรกฎาคม': 6, 'กรกฎา': 6,
+      'ส.ค.': 7, 'สิงหาคม': 7, 'สิงหา': 7,
+      'ก.ย.': 8, 'กันยายน': 8, 'กันยา': 8,
+      'ต.ค.': 9, 'ตุลาคม': 9, 'ตุลา': 9,
+      'พ.ย.': 10, 'พฤศจิกายน': 10, 'พฤศจิกา': 10,
+      'ธ.ค.': 11, 'ธันวาคม': 11, 'ธันวา': 11
+    };
+    for (const [mName, mIdx] of Object.entries(thaiMonths)) {
+      if (str.includes(mName)) {
+        const dayMatch = str.match(/^(\d{1,2})\s+/) || str.match(/\b(\d{1,2})\s+/);
+        const yearMatch = str.match(/\b(25\d{2}|20\d{2})\b/) || str.match(/\s+(\d{2})\s*/);
+        const timeMatch = str.match(/(\d{1,2}):(\d{2})/);
+        const day = dayMatch ? parseInt(dayMatch[1], 10) : 1;
+        let year = new Date().getFullYear();
+        if (yearMatch) {
+          let y = parseInt(yearMatch[1], 10);
+          if (y > 2400) y -= 543;
+          else if (y < 100) y = (y > 50 ? 2500 + y - 543 : 2000 + y);
+          year = y;
+        }
+        let hour = 12, min = 0;
+        if (timeMatch) {
+          hour = parseInt(timeMatch[1], 10);
+          min = parseInt(timeMatch[2], 10);
+        }
+        const res = new Date(year, mIdx, day, hour, min);
+        if (!isNaN(res.getTime())) return res;
+      }
+    }
+  }
+  return null;
+}
+
+// Helper: Format message date into rich Thai format for hover tooltip and display
+export function getMessageThaiDateInfo(msg, lead = null) {
+  if (!msg) return null;
+
+  let msgDate = parseAnyDate(msg.created_time) ||
+                parseAnyDate(msg.created_at) ||
+                parseAnyDate(msg.createdAt) ||
+                parseAnyDate(msg.timestamp) ||
+                parseAnyDate(msg.date);
+
+  // Fallback to lead context if msg lacks timestamp
+  if (!msgDate && lead) {
+    msgDate = parseAnyDate(lead.date) ||
+              parseAnyDate(lead.timestamp) ||
+              parseAnyDate(lead.lastActivity) ||
+              parseAnyDate(lead.last_activity) ||
+              parseAnyDate(lead.updatedTime) ||
+              parseAnyDate(lead.updated_time) ||
+              parseAnyDate(lead.updated_at) ||
+              parseAnyDate(lead.created_at);
+  }
+
+  // If no date found, fallback using msg.time if available
+  if (!msgDate) {
+    if (msg.time) {
+      return {
+        dateObj: null,
+        dayKey: 'unknown',
+        timeStr: msg.time,
+        displayTime: msg.time,
+        badgeText: msg.time,
+        fullTooltip: `เวลา ${msg.time}`,
+        dividerText: 'ประวัติการสนทนา'
+      };
+    }
+    return null;
+  }
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+
+  const timeStr = msg.time || `${pad(msgDate.getHours())}:${pad(msgDate.getMinutes())}`;
+  const dayKey = `${msgDate.getFullYear()}-${pad(msgDate.getMonth() + 1)}-${pad(msgDate.getDate())}`;
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
+
+  const thaiFullDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+  const thaiShortDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+  const thaiFullMonths = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+  const thaiShortMonths = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+  ];
+
+  const thaiYear = msgDate.getFullYear() + 543;
+  const shortThaiYear = thaiYear % 100;
+  const dayOfWeek = msgDate.getDay();
+  const dateNum = msgDate.getDate();
+  const monthNum = msgDate.getMonth();
+
+  const diffMs = now.getTime() - msgDate.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  let relativeAgo = '';
+  if (diffDays >= 1) {
+    relativeAgo = `(${diffDays} วันที่แล้ว)`;
+  } else if (diffMs > 0) {
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours >= 1) {
+      relativeAgo = `(${diffHours} ชั่วโมงที่แล้ว)`;
+    } else {
+      const diffMins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+      relativeAgo = `(${diffMins} นาทีก่อน)`;
+    }
+  }
+
+  let badgeText = '';
+  let displayTime = '';
+  let fullTooltip = '';
+  let dividerText = '';
+
+  const isThisYear = msgDate.getFullYear() === now.getFullYear();
+
+  if (dayKey === todayKey) {
+    displayTime = `วันนี้ ${timeStr}`;
+    badgeText = `วันนี้ • ${timeStr}`;
+    fullTooltip = `วันนี้ (${thaiShortDays[dayOfWeek]} ${dateNum} ${thaiShortMonths[monthNum]} ${thaiYear}) เวลา ${timeStr} น. ${relativeAgo}`.trim();
+    dividerText = `วันนี้ • ${dateNum} ${thaiFullMonths[monthNum]} ${thaiYear}`;
+  } else if (dayKey === yesterdayKey) {
+    displayTime = `เมื่อวาน ${timeStr}`;
+    badgeText = `เมื่อวาน • ${timeStr}`;
+    fullTooltip = `เมื่อวานนี้ (${thaiShortDays[dayOfWeek]} ${dateNum} ${thaiShortMonths[monthNum]} ${thaiYear}) เวลา ${timeStr} น.`.trim();
+    dividerText = `เมื่อวาน • ${dateNum} ${thaiFullMonths[monthNum]} ${thaiYear}`;
+  } else {
+    // Other days
+    if (isThisYear) {
+      displayTime = `${thaiShortDays[dayOfWeek]} ${dateNum} ${thaiShortMonths[monthNum]} • ${timeStr}`;
+      badgeText = `${thaiShortDays[dayOfWeek]} ${dateNum} ${thaiShortMonths[monthNum]} • ${timeStr}`;
+    } else {
+      displayTime = `${dateNum} ${thaiShortMonths[monthNum]} ${shortThaiYear} • ${timeStr}`;
+      badgeText = `${dateNum} ${thaiShortMonths[monthNum]} ${shortThaiYear} • ${timeStr}`;
+    }
+    fullTooltip = `วัน${thaiFullDays[dayOfWeek]}ที่ ${dateNum} ${thaiFullMonths[monthNum]} ${thaiYear} เวลา ${timeStr} น. ${relativeAgo}`.trim();
+    dividerText = `วัน${thaiFullDays[dayOfWeek]}ที่ ${dateNum} ${thaiFullMonths[monthNum]} ${thaiYear}`;
+  }
+
+  return {
+    dateObj: msgDate,
+    dayKey,
+    timeStr,
+    displayTime,
+    badgeText,
+    fullTooltip,
+    dividerText
+  };
+}
+
 export default function UnifiedChatCenter({
   leads,
   setLeads,
@@ -1126,6 +1310,8 @@ export default function UnifiedChatCenter({
             text: displayText,
             attachments: parsedAtts,
             time: timeStr,
+            created_time: newRow.created_at || new Date().toISOString(),
+            timestamp: newRow.created_at ? new Date(newRow.created_at).getTime() : Date.now(),
             replyTo: webhookReplyTo
           };
 
@@ -2108,7 +2294,9 @@ export default function UnifiedChatCenter({
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       adminName: activeAdminName,
       isCommentReply: replyMode === 'comment',
-      replyTo: replyContext
+      replyTo: replyContext,
+      created_time: new Date().toISOString(),
+      timestamp: Date.now()
     };
 
     // Save reply quote to cache immediately
@@ -2391,7 +2579,9 @@ export default function UnifiedChatCenter({
           sender: 'customer',
           text: pick.inquiry,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isComment: pick.sourceType === 'video_comment'
+          isComment: pick.sourceType === 'video_comment',
+          created_time: new Date().toISOString(),
+          timestamp: Date.now()
         }
       ]
     };
@@ -2414,7 +2604,9 @@ export default function UnifiedChatCenter({
           text: autoReply,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           adminName: '🤖 AI Auto-Pilot',
-          isCommentReply: newLead.sourceType === 'video_comment'
+          isCommentReply: newLead.sourceType === 'video_comment',
+          created_time: new Date().toISOString(),
+          timestamp: Date.now()
         });
         newLead.status = 'ติดต่อกลับแล้ว (Contacted)';
         newLead.notes += ' | AI Auto-Pilot ตอบกลับเรียบร้อยแล้ว';
@@ -3657,11 +3849,67 @@ export default function UnifiedChatCenter({
                             <ExternalLink size={11} />
                           </a>
                         )}
+                        {(() => {
+                          const lastMsg = (activeLead.messages && activeLead.messages.length > 0)
+                            ? activeLead.messages[activeLead.messages.length - 1]
+                            : null;
+                          const leadDateInfo = getMessageThaiDateInfo(lastMsg, activeLead);
+                          if (!leadDateInfo?.fullTooltip) return null;
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                color: '#0369a1',
+                                fontSize: '0.68rem',
+                                fontWeight: '700',
+                                backgroundColor: '#f0f9ff',
+                                padding: '1px 6px',
+                                borderRadius: '5px',
+                                border: '1px solid #bae6fd',
+                                marginLeft: '4px'
+                              }}
+                              title={`วันที่คุยล่าสุด: ${leadDateInfo.fullTooltip}`}
+                            >
+                              <Calendar size={10} color="#0284c7" />
+                              <span>{leadDateInfo.displayTime || leadDateInfo.dividerText}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     ) : (
-                      <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', flexWrap: 'wrap' }}>
                         {renderSourceTypeBadge(activeLead.sourceType || 'inbox')}
                         <span>บทสนทนา Messenger</span>
+                        {(() => {
+                          const lastMsg = (activeLead.messages && activeLead.messages.length > 0)
+                            ? activeLead.messages[activeLead.messages.length - 1]
+                            : null;
+                          const leadDateInfo = getMessageThaiDateInfo(lastMsg, activeLead);
+                          if (!leadDateInfo?.fullTooltip) return null;
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                color: '#0369a1',
+                                fontSize: '0.68rem',
+                                fontWeight: '700',
+                                backgroundColor: '#f0f9ff',
+                                padding: '1px 6px',
+                                borderRadius: '5px',
+                                border: '1px solid #bae6fd',
+                                marginLeft: '4px'
+                              }}
+                              title={`วันที่คุยล่าสุด: ${leadDateInfo.fullTooltip}`}
+                            >
+                              <Calendar size={10} color="#0284c7" />
+                              <span>{leadDateInfo.displayTime || leadDateInfo.dividerText}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -4181,6 +4429,11 @@ export default function UnifiedChatCenter({
                   const msgKey = msg.id || `msg-idx-${idx}`;
                   const isPickerOpen = activeReactionPickerMid === msgKey;
 
+                  const msgDateInfo = getMessageThaiDateInfo(msg, activeLead);
+                  const prevMsg = idx > 0 ? (activeLead.messages || [])[idx - 1] : null;
+                  const prevMsgDateInfo = prevMsg ? getMessageThaiDateInfo(prevMsg, activeLead) : null;
+                  const showDateDivider = msgDateInfo?.dayKey && msgDateInfo.dayKey !== 'unknown' && (!prevMsgDateInfo || msgDateInfo.dayKey !== prevMsgDateInfo.dayKey);
+
                   const adminReaction = getAdminReaction(msg);
                   const hasHeart = adminReaction?.emoji === '❤️';
                   const hasLike = adminReaction?.emoji === '👍';
@@ -4194,40 +4447,87 @@ export default function UnifiedChatCenter({
                     : '';
 
                   return (
-                    <div
-                      key={msgKey}
-                      id={`msg-bubble-${msgKey}`}
-                      className={`msg-bubble-row ${isPickerOpen ? 'picker-open' : ''}`}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: isAdmin ? 'flex-end' : 'flex-start',
-                        position: 'relative',
-                        margin: hasReactions ? '3px 0 10px 0' : '3px 0'
-                      }}
-                    >
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        flexDirection: isAdmin ? 'row-reverse' : 'row',
-                        maxWidth: '85%'
-                      }}>
-                        {/* The Message Bubble */}
+                    <React.Fragment key={`frag-${msgKey}`}>
+                      {/* Day Divider Pill */}
+                      {showDateDivider && (
                         <div
-                          onDoubleClick={() => handleStartReply(msg)}
                           style={{
-                            backgroundColor: isAdmin ? activeTheme.primary : '#ffffff',
-                            color: isAdmin ? '#ffffff' : '#1e293b',
-                            border: isAdmin ? 'none' : '1px solid #e2e8f0',
-                            borderRadius: isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                            padding: '11px 15px',
-                            boxShadow: (searchQuery.trim() && typeof msg.text === 'string' && msg.text.toLowerCase().includes(searchQuery.trim().toLowerCase()))
-                              ? '0 0 0 3px #facc15, 0 2px 8px rgba(250, 204, 21, 0.35)'
-                              : 'var(--shadow-sm)',
-                            position: 'relative'
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: idx === 0 ? '4px 0 12px 0' : '18px 0 12px 0',
+                            position: 'relative',
+                            width: '100%',
+                            userSelect: 'none'
                           }}
                         >
+                          <div style={{
+                            position: 'absolute',
+                            left: '12px',
+                            right: '12px',
+                            height: '1px',
+                            backgroundColor: '#e2e8f0',
+                            zIndex: 0
+                          }} />
+                          <div
+                            style={{
+                              position: 'relative',
+                              zIndex: 1,
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '16px',
+                              padding: '3px 12px',
+                              fontSize: '0.68rem',
+                              fontWeight: '700',
+                              color: '#64748b',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px'
+                            }}
+                            title={`แชทวันที่ ${msgDateInfo.dividerText}`}
+                          >
+                            <Calendar size={11} color="#0284c7" />
+                            <span>{msgDateInfo.dividerText}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div
+                        id={`msg-bubble-${msgKey}`}
+                        className={`msg-bubble-row ${isPickerOpen ? 'picker-open' : ''}`}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: isAdmin ? 'flex-end' : 'flex-start',
+                          position: 'relative',
+                          margin: hasReactions ? '3px 0 10px 0' : '3px 0'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexDirection: isAdmin ? 'row-reverse' : 'row',
+                          maxWidth: '94%'
+                        }}>
+                          {/* The Message Bubble */}
+                          <div
+                            onDoubleClick={() => handleStartReply(msg)}
+                            title={msgDateInfo?.fullTooltip ? `วันที่คุย: ${msgDateInfo.fullTooltip}` : undefined}
+                            style={{
+                              backgroundColor: isAdmin ? activeTheme.primary : '#ffffff',
+                              color: isAdmin ? '#ffffff' : '#1e293b',
+                              border: isAdmin ? 'none' : '1px solid #e2e8f0',
+                              borderRadius: isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
+                              padding: '11px 15px',
+                              maxWidth: '82%',
+                              boxShadow: (searchQuery.trim() && typeof msg.text === 'string' && msg.text.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+                                ? '0 0 0 3px #facc15, 0 2px 8px rgba(250, 204, 21, 0.35)'
+                                : 'var(--shadow-sm)',
+                              position: 'relative'
+                            }}
+                          >
                           {/* Clean sender label - only show if human agent or customer */}
                           {(!isAdmin || (msg.adminName && !msg.adminName.includes('Good Vibes') && !msg.adminName.includes('ทาสีกัน') && !msg.adminName.includes('RoomsPainting') && !msg.adminName.includes('ช่างหมี') && msg.adminName !== 'แอดมินเพจ')) && (
                             <div style={{
@@ -4539,15 +4839,39 @@ export default function UnifiedChatCenter({
 
                         <div style={{
                           fontSize: '0.68rem',
-                          color: isAdmin ? '#dbeafe' : '#94a3b8',
+                          color: isAdmin ? 'rgba(255, 255, 255, 0.9)' : '#64748b',
                           textAlign: 'right',
-                          marginTop: '4px',
+                          marginTop: '5px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'flex-end',
-                          gap: '4px'
+                          gap: '5px',
+                          userSelect: 'none'
                         }}>
-                          <span>{msg.time}</span>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (msgDateInfo?.fullTooltip) {
+                                try {
+                                  navigator.clipboard?.writeText(msgDateInfo.fullTooltip);
+                                  setToastNotification(`📋 คัดลอกวันที่คุยแล้ว: ${msgDateInfo.fullTooltip}`);
+                                  setTimeout(() => setToastNotification(null), 3500);
+                                } catch (err) {}
+                              }
+                            }}
+                            title={msgDateInfo?.fullTooltip ? `วันที่คุย: ${msgDateInfo.fullTooltip} (คลิกเพื่อคัดลอก)` : (msg.time ? `เวลา: ${msg.time}` : undefined)}
+                            style={{
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              fontWeight: '600',
+                              color: isAdmin ? 'rgba(255, 255, 255, 0.92)' : '#64748b'
+                            }}
+                          >
+                            <Calendar size={10} style={{ opacity: 0.85 }} />
+                            <span>{msgDateInfo?.displayTime || msgDateInfo?.badgeText || msg.time}</span>
+                          </span>
                           {isAdmin && (
                             msg.failed ? (
                               <span
@@ -4663,9 +4987,12 @@ export default function UnifiedChatCenter({
                           display: 'flex',
                           alignItems: 'center',
                           gap: '3px',
-                          position: 'relative'
+                          position: 'relative',
+                          flexShrink: 0,
+                          flexDirection: isAdmin ? 'row-reverse' : 'row'
                         }}
                       >
+
                         {/* Quick Heart Button */}
                         <button
                           type="button"
@@ -4863,8 +5190,9 @@ export default function UnifiedChatCenter({
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                </React.Fragment>
+              );
+            })}
                 </div>
 
                 {/* Floating Scroll to Bottom Button */}
