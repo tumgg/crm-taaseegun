@@ -752,6 +752,7 @@ export default function UnifiedChatCenter({
   // AI TL;DR Summary & Follow-Up UI States
   const [isAiSummaryExpanded, setIsAiSummaryExpanded] = useState(false);
   const [dismissedFollowUps, setDismissedFollowUps] = useState({});
+  const [dismissed24hBanners, setDismissed24hBanners] = useState({});
 
   // Message Reply & Quoting State
   const [replyingToMessage, setReplyingToMessage] = useState(null); // { id, mid, sender, name, text, attachments, time }
@@ -2064,6 +2065,11 @@ export default function UnifiedChatCenter({
 
   const handleDismissFollowUp = (leadId) => {
     setDismissedFollowUps(prev => ({ ...prev, [leadId]: true }));
+  };
+
+  const handleDismiss24hBanner = (leadId) => {
+    if (!leadId) return;
+    setDismissed24hBanners(prev => ({ ...prev, [leadId]: true }));
   };
 
   // Reply & Quoting Action Handlers
@@ -5359,98 +5365,131 @@ export default function UnifiedChatCenter({
                 {/* 24-Hour Messenger Window Policy Banner */}
                 {activeLead?.isLiveFacebookLead && !messengerWindowStatus.isComment && (
                   messengerWindowStatus.isOutside24h ? (
-                    <div style={{
-                      backgroundColor: '#fffbeb',
-                      border: '1.5px solid #fde68a',
-                      borderRadius: '10px',
-                      padding: '9px 13px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      boxShadow: '0 1px 3px rgba(217, 119, 6, 0.08)'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                        <div style={{
-                          width: '30px',
-                          height: '30px',
-                          borderRadius: '8px',
-                          backgroundColor: '#fef3c7',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}>
-                          <AlertTriangle size={17} color="#d97706" />
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            <span>ลูกค้าไม่ได้ทักมาเกิน 24 ชั่วโมงแล้ว</span>
-                            <span style={{ fontSize: '0.70rem', backgroundColor: '#fef3c7', padding: '1px 6px', borderRadius: '4px', color: '#b45309', border: '1px solid #fde68a' }}>
-                              ทักล่าสุด {messengerWindowStatus.hoursAgoText}ที่แล้ว
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '0.74rem', color: '#78350f', marginTop: '2px', lineHeight: '1.4' }}>
-                            ตามนโยบายความปลอดภัย Facebook (24h Policy) ระบบภายนอกไม่สามารถส่งข้อความได้ กรุณาตอบผ่าน Meta Business Suite โดยตรง
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenMetaBusinessSuite()}
-                          title={`เปิดแชทของ "${activeLead?.name || "ลูกค้า"}" ใน Meta Business Suite (พร้อมคัดลอกข้อความที่พิมพ์ไว้)`}
-                          style={{
-                            backgroundColor: '#1877f2',
-                            color: '#ffffff',
-                            border: 'none',
+                    !dismissed24hBanners[activeLead?.id] && (
+                      <div style={{
+                        backgroundColor: '#fffbeb',
+                        border: '1.5px solid #fde68a',
+                        borderRadius: '10px',
+                        padding: '9px 13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        boxShadow: '0 1px 3px rgba(217, 119, 6, 0.08)',
+                        animation: 'fadeIn 0.15s ease-out'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            width: '30px',
+                            height: '30px',
                             borderRadius: '8px',
-                            padding: '7px 13px',
-                            fontSize: '0.80rem',
-                            fontWeight: '700',
-                            cursor: 'pointer',
+                            backgroundColor: '#fef3c7',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 6px rgba(24, 119, 242, 0.3)',
-                            transition: 'all 0.15s ease'
-                          }}
-                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#166fe5'}
-                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1877f2'}
-                        >
-                          <span>เปิดแชท "${activeLead?.name || "ลูกค้า"}" ใน Meta</span>
-                          <ExternalLink size={13} />
-                        </button>
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <AlertTriangle size={17} color="#d97706" />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span>ลูกค้าไม่ได้ทักมาเกิน 24 ชั่วโมงแล้ว</span>
+                              <span style={{ fontSize: '0.70rem', backgroundColor: '#fef3c7', padding: '1px 6px', borderRadius: '4px', color: '#b45309', border: '1px solid #fde68a' }}>
+                                ทักล่าสุด {messengerWindowStatus.hoursAgoText}ที่แล้ว
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#78350f', marginTop: '2px', lineHeight: '1.4' }}>
+                              ตามนโยบายความปลอดภัย Facebook (24h Policy) ระบบภายนอกไม่สามารถส่งข้อความได้ กรุณาตอบผ่าน Meta Business Suite โดยตรง
+                            </div>
+                          </div>
+                        </div>
 
-                        {facebookPageInboxUrl && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                           <button
                             type="button"
-                            onClick={() => handleOpenMetaBusinessSuite(facebookPageInboxUrl)}
-                            title={`เปิดแชทของ "${activeLead?.name || "ลูกค้า"}" ผ่าน Facebook Page Inbox`}
+                            onClick={() => handleOpenMetaBusinessSuite()}
+                            title={`เปิดแชทของ "${activeLead?.name || "ลูกค้า"}" ใน Meta Business Suite (พร้อมคัดลอกข้อความที่พิมพ์ไว้)`}
                             style={{
-                              backgroundColor: '#ffffff',
-                              color: '#1e293b',
-                              border: '1px solid #cbd5e1',
+                              backgroundColor: '#1877f2',
+                              color: '#ffffff',
+                              border: 'none',
                               borderRadius: '8px',
-                              padding: '6px 11px',
-                              fontSize: '0.74rem',
-                              fontWeight: '600',
+                              padding: '7px 13px',
+                              fontSize: '0.80rem',
+                              fontWeight: '700',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '4px',
+                              gap: '6px',
+                              boxShadow: '0 2px 6px rgba(24, 119, 242, 0.3)',
                               transition: 'all 0.15s ease'
                             }}
-                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#166fe5'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1877f2'}
                           >
-                            <span>FB Inbox</span>
-                            <ExternalLink size={11} color="#64748b" />
+                            <span>เปิดแชท "{activeLead?.name || "ลูกค้า"}" ใน Meta</span>
+                            <ExternalLink size={13} />
                           </button>
-                        )}
+
+                          {facebookPageInboxUrl && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMetaBusinessSuite(facebookPageInboxUrl)}
+                              title={`เปิดแชทของ "${activeLead?.name || "ลูกค้า"}" ผ่าน Facebook Page Inbox`}
+                              style={{
+                                backgroundColor: '#ffffff',
+                                color: '#1e293b',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                padding: '6px 11px',
+                                fontSize: '0.74rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                            >
+                              <span>FB Inbox</span>
+                              <ExternalLink size={11} color="#64748b" />
+                            </button>
+                          )}
+
+                          {/* Close X Button to dismiss yellow banner */}
+                          <button
+                            type="button"
+                            onClick={() => handleDismiss24hBanner(activeLead?.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#b45309',
+                              cursor: 'pointer',
+                              padding: '5px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s ease',
+                              marginLeft: '2px'
+                            }}
+                            title="ปิดการแจ้งเตือนนี้ (ซ่อนแถบสีเหลือง)"
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#fde68a';
+                              e.currentTarget.style.color = '#78350f';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.color = '#b45309';
+                            }}
+                          >
+                            <X size={16} strokeWidth={2.5} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )
                   ) : (
                     <div style={{
                       backgroundColor: '#f0fdf4',
