@@ -50,8 +50,7 @@ git push -u origin main
 ---
 
 ## 👥 บัญชีเข้าสู่ระบบเริ่มต้น
-- **พี่ตั้ม (Owner / Super Admin):** `tum` / `password123`
-- **แอดมินนนท์ (Lead Sales):** `non` / `password123`
-- **แอดมินแพรว (Customer Support):** `praew` / `password123`
+- **พี่ตั้ม (Owner / Super Admin):** `tumkung@taaseegun.com` (หรือ `tumkung`) / `tumkung`
+- **แอดมินตู่ (Admin / Lead Sales):** `toojung@taaseegun.com` (หรือ `toojung`) / `toojung`
 
 *(พี่ตั้มสามารถกดปุ่ม **"👥 จัดการทีมงาน"** ที่มุมขวาบนของระบบ เพื่อเพิ่มทีมงานใหม่ เปลี่ยนรหัสผ่าน หรือคัดลอกข้อมูลส่งให้ทีมงานได้ตลอดเวลาครับ)*

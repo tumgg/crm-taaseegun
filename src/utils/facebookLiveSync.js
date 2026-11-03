@@ -248,15 +248,15 @@ export function getCrmAuthHeaders(additional = {}) {
     if (userStr) {
       const user = JSON.parse(userStr);
       headers['X-Admin-Session'] = btoa(unescape(encodeURIComponent(JSON.stringify({
-        id: user.id || 'user-tum',
+        id: user.id || 'user-tumkung',
         role: user.role || 'owner',
         name: user.name || 'พี่ตั้ม'
       }))));
     } else {
-      headers['X-Admin-Session'] = btoa(JSON.stringify({ id: 'user-tum', role: 'owner', name: 'พี่ตั้ม' }));
+      headers['X-Admin-Session'] = btoa(JSON.stringify({ id: 'user-tumkung', role: 'owner', name: 'พี่ตั้ม' }));
     }
   } catch {
-    headers['X-Admin-Session'] = btoa(JSON.stringify({ id: 'user-tum', role: 'owner', name: 'พี่ตั้ม' }));
+    headers['X-Admin-Session'] = btoa(JSON.stringify({ id: 'user-tumkung', role: 'owner', name: 'พี่ตั้ม' }));
   }
   return headers;
 }

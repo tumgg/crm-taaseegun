@@ -200,7 +200,7 @@ export default function TeamManagementModal({
   };
 
   const handleDeleteMember = (memberId, memberName) => {
-    if (memberId === 'user-tum') {
+    if (memberId === 'user-tumkung' || memberId === 'user-tum' || teamMembers.find(m => m.id === memberId)?.role === 'owner') {
       alert('ไม่สามารถลบบัญชีหลักของพี่ตั้ม (Owner) ได้ครับ');
       return;
     }
@@ -353,7 +353,7 @@ export default function TeamManagementModal({
                     padding: '14px 18px',
                     borderRadius: '12px',
                     border: '1px solid #e2e8f0',
-                    backgroundColor: member.id === 'user-tum' ? '#f0fdf4' : '#ffffff',
+                    backgroundColor: (member.id === 'user-tumkung' || member.id === 'user-tum' || member.role === 'owner') ? '#f0fdf4' : '#ffffff',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                     flexWrap: 'wrap',
                     gap: '12px'
@@ -553,7 +553,7 @@ export default function TeamManagementModal({
                       )}
                     </button>
 
-                    {member.id !== 'user-tum' && (
+                    {member.id !== 'user-tumkung' && member.id !== 'user-tum' && member.role !== 'owner' && (
                       <button
                         onClick={() => handleDeleteMember(member.id, member.name)}
                         style={{

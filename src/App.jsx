@@ -38,7 +38,19 @@ export default function App() {
   const [teamMembers, setTeamMembers] = useState(() => {
     try {
       const stored = localStorage.getItem('omnisocial_team_accounts');
-      return stored ? JSON.parse(stored) : defaultTeamAccounts;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // If stored contains old accounts (e.g. user-tum, non, praew) or lacks user-tumkung, reset to new default accounts
+        const hasOld = Array.isArray(parsed) && parsed.some(m => m.id === 'user-tum' || m.username === 'tum' || m.username === 'non' || m.username === 'praew');
+        const hasNew = Array.isArray(parsed) && parsed.some(m => m.id === 'user-tumkung' || m.username === 'tumkung@taaseegun.com');
+        if (hasOld || !hasNew) {
+          localStorage.setItem('omnisocial_team_accounts', JSON.stringify(defaultTeamAccounts));
+          return defaultTeamAccounts;
+        }
+        return parsed;
+      }
+      localStorage.setItem('omnisocial_team_accounts', JSON.stringify(defaultTeamAccounts));
+      return defaultTeamAccounts;
     } catch {
       return defaultTeamAccounts;
     }
@@ -47,9 +59,19 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const stored = localStorage.getItem('omnisocial_current_user');
-      return stored ? JSON.parse(stored) : defaultTeamAccounts[0]; // Default to พี่ตั้ม for immediate testing
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Only keep logged in if they match one of the new valid accounts (tumkung or toojung)
+        const isMatch = defaultTeamAccounts.find(
+          acc => acc.id === parsed.id || acc.username === parsed.username || acc.email === parsed.email
+        );
+        if (isMatch) return isMatch;
+      }
+      // If old or missing user, clear stored session so user must log in with new credentials
+      localStorage.removeItem('omnisocial_current_user');
+      return null;
     } catch {
-      return defaultTeamAccounts[0];
+      return null;
     }
   });
 
@@ -381,11 +403,21 @@ export default function App() {
   // Authentication handlers
   const handleLoginSuccess = (account) => {
     setCurrentUser(account);
+    try {
+      localStorage.setItem('omnisocial_current_user', JSON.stringify(account));
+    } catch (err) {
+      console.warn('Failed to save session to localStorage:', err);
+    }
   };
 
   const handleLogout = () => {
     if (confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) {
       setCurrentUser(null);
+      try {
+        localStorage.removeItem('omnisocial_current_user');
+      } catch (err) {
+        console.warn('Failed to remove session from localStorage:', err);
+      }
     }
   };
 

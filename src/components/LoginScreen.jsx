@@ -14,40 +14,30 @@ import {
 
 export const teamAccounts = [
   {
-    id: 'user-tum',
+    id: 'user-tumkung',
     name: 'พี่ตั้ม (Owner / Super Admin)',
-    email: 'tum@taaseegun.com',
-    username: 'tum',
-    password: 'password123',
+    email: 'tumkung@taaseegun.com',
+    username: 'tumkung@taaseegun.com',
+    password: 'tumkung',
     role: 'owner',
     roleLabel: '👑 เจ้าของระบบ (Super Admin)',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
   },
   {
-    id: 'user-non',
-    name: 'แอดมินนนท์ (Lead Sales)',
-    email: 'non@taaseegun.com',
-    username: 'non',
-    password: 'password123',
+    id: 'user-toojung',
+    name: 'แอดมินตู่ (Admin / Lead Sales)',
+    email: 'toojung@taaseegun.com',
+    username: 'toojung@taaseegun.com',
+    password: 'toojung',
     role: 'sales',
-    roleLabel: '👤 ทีมขาย (Sales Admin)',
+    roleLabel: '👤 ทีมขายและแอดมิน (Admin / Sales)',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'user-praew',
-    name: 'แอดมินแพรว (Customer Support)',
-    email: 'praew@taaseegun.com',
-    username: 'praew',
-    password: 'password123',
-    role: 'support',
-    roleLabel: '👤 ฝ่ายบริการลูกค้า (Support)',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80'
   }
 ];
 
 export default function LoginScreen({ onLoginSuccess, teamMembers = teamAccounts }) {
-  const [identifier, setIdentifier] = useState('tum');
-  const [password, setPassword] = useState('password123');
+  const [identifier, setIdentifier] = useState('tumkung@taaseegun.com');
+  const [password, setPassword] = useState('tumkung');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -59,9 +49,14 @@ export default function LoginScreen({ onLoginSuccess, teamMembers = teamAccounts
 
     setTimeout(() => {
       const trimmedId = identifier.trim().toLowerCase();
-      const account = teamMembers.find(
-        acc => (acc.username.toLowerCase() === trimmedId || (acc.email && acc.email.toLowerCase() === trimmedId)) && acc.password === password
-      );
+      const account = teamMembers.find(acc => {
+        const usernameMatch = acc.username && acc.username.toLowerCase() === trimmedId;
+        const emailMatch = acc.email && acc.email.toLowerCase() === trimmedId;
+        const shortUsernameMatch = acc.username && acc.username.toLowerCase().split('@')[0] === trimmedId;
+        const shortEmailMatch = acc.email && acc.email.toLowerCase().split('@')[0] === trimmedId;
+        const idMatch = acc.id && acc.id.toLowerCase() === trimmedId;
+        return (usernameMatch || emailMatch || shortUsernameMatch || shortEmailMatch || idMatch) && acc.password === password;
+      });
 
       if (account) {
         onLoginSuccess(account);
@@ -183,7 +178,7 @@ export default function LoginScreen({ onLoginSuccess, teamMembers = teamAccounts
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="เช่น tum หรือ tum@taaseegun.com"
+                placeholder="เช่น tumkung@taaseegun.com หรือ toojung"
                 style={{
                   border: 'none',
                   backgroundColor: 'transparent',

@@ -14,7 +14,7 @@ export const ALLOWED_PAGE_IDS = new Set([
 ]);
 
 // Valid OmniSocial Team IDs
-const VALID_TEAM_IDS = new Set(['user-tum', 'user-non', 'user-praew']);
+const VALID_TEAM_IDS = new Set(['user-tumkung', 'user-toojung', 'user-tum']);
 
 /**
  * Applies strict security headers to the response
